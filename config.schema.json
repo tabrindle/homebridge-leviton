@@ -1,0 +1,20 @@
+{
+  "pluginAlias": "LevitonDecoraSmart",
+  "pluginType": "platform",
+  "singular": false,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "title": "email",
+        "type": "string",
+        "required": true
+      },
+      "password": {
+        "title": "password",
+        "type": "string",
+        "required": true
+      }
+    }
+  }
+}
