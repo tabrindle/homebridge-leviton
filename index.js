@@ -20,6 +20,7 @@ class LevitonDecoraSmartPlatform {
       return
     }
 
+    // on launch, init api, iterate over new devices
     api.on('didFinishLaunching', async () => {
       this.log('didFinishLaunching')
       const { devices, token } = await this.initialize(config)
@@ -35,6 +36,7 @@ class LevitonDecoraSmartPlatform {
     })
   }
 
+  // init function that sets up personID, accountID and residenceID to return token+devices
   async initialize(config) {
     this.log('initialize')
     const { id: token, userId: personID } = await Leviton.postPersonLogin({
@@ -59,6 +61,7 @@ class LevitonDecoraSmartPlatform {
     return { devices, token }
   }
 
+  // switch power state getter, closure with service, device and token
   onGetPower(service, device, token) {
     return function (callback) {
       this.log('onGetPower', device.name)
@@ -79,6 +82,7 @@ class LevitonDecoraSmartPlatform {
     }
   }
 
+  // switch power state setter, closure with service, device and token
   onSetPower(service, device, token) {
     return function (value, callback) {
       this.log('onSetPower', device.name, value)
@@ -100,6 +104,7 @@ class LevitonDecoraSmartPlatform {
     }
   }
 
+  // switch brightness getter closure with service, device and token
   onGetBrightness(service, device, token) {
     return function (callback) {
       this.log('onGetBrightness', device.name)
@@ -120,6 +125,7 @@ class LevitonDecoraSmartPlatform {
     }
   }
 
+  // switch brightness setter closure with service, device and token
   onSetBrightness(service, device, token) {
     return function (brightness, callback) {
       this.log('onSetBrightness', device.name, brightness)
@@ -144,11 +150,15 @@ class LevitonDecoraSmartPlatform {
   async addAccessory(device, token) {
     this.log(`addAccessory ${device.name}`)
 
+    // generate uuid based on device serial and create accessory
     const uuid = UUID.generate(device.serial)
     const accessory = new this.api.platformAccessory(device.name, uuid)
 
+    // save device and token information to context for later use
     accessory.context.device = device
     accessory.context.token = token
+
+    // save device info to AccessoryInformation service (which always exists?)
     accessory
       .getService(Service.AccessoryInformation)
       .setCharacteristic(Characteristic.Name, device.name)
@@ -157,20 +167,25 @@ class LevitonDecoraSmartPlatform {
       .setCharacteristic(Characteristic.Model, device.model)
       .setCharacteristic(Characteristic.FirmwareRevision, device.version)
 
+    // setupService adds services, characteristics and getters/setters
     this.setupService(accessory)
     this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
       accessory,
     ])
+
+    // add configured accessory
     this.accessories.push(accessory)
     this.log(`Finished adding accessory ${device.name}`)
   }
 
+  // set up cached accessories
   async configureAccessory(accessory) {
     this.log('configureAccessory', accessory.displayName)
     this.setupService(accessory)
     this.accessories.push(accessory)
   }
 
+  // fetch the status of a device to populate power state and brightness
   async getStatus(device, token) {
     this.log('getStatus', device.name)
     return Leviton.getIotSwitch({
@@ -179,21 +194,28 @@ class LevitonDecoraSmartPlatform {
     })
   }
 
+  // setup service function 
   async setupService(accessory) {
     this.log('setupService', accessory.displayName)
+
+    // get device and token out of context to update status
     const device = accessory.context.device
     const token = accessory.context.token
     const status = await this.getStatus(device, token)
+
+    // get the accessory service, if not add it
     const service =
       accessory.getService(Service.Lightbulb, device.name) ||
       accessory.addService(Service.Lightbulb, device.name)
 
+    // add handlers for on/off characteristic, set initial value
     service
       .getCharacteristic(Characteristic.On)
       .on('get', this.onGetPower(service, device, token).bind(this))
       .on('set', this.onSetPower(service, device, token).bind(this))
       .updateValue(status.power === 'ON' ? true : false)
 
+    // set handlers for brightness, set initial value and min/max bounds
     service
       .getCharacteristic(Characteristic.Brightness)
       .on('get', this.onGetBrightness(service, device, token).bind(this))
@@ -206,6 +228,7 @@ class LevitonDecoraSmartPlatform {
       .updateValue(status.brightness)
   }
 
+  // remove accessories and unregister
   removeAccessories() {
     this.log.info('Removing all accessories')
     this.api.unregisterPlatformAccessories(
