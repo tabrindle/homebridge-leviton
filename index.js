@@ -249,24 +249,88 @@ class LevitonDecoraSmartPlatform {
     const token = accessory.context.token
     
     //Get the model number
-    this.log('  -Device Model: ', device.model, device.customType)
+    this.log('  -Device Model: ', device.model)
     
     
-    switch (device.customType) {
-    	default:
-    		this.setupLightbulbService(accessory);
-    		break;
-    	case "ceiling-fan":
+    switch (device.model) {
+    	case "DW4SF":  //Fan Speed Control
 			this.setupFanService(accessory);
 	    	break;
-    		
-    
+    	case "DWVAA":  //Voice Dimmer with Amazon Alexa
+			this.setupLightbulbService(accessory);
+	    	break;
+       	case "DW1KD":  //1000W Dimmer
+			this.setupLightbulbService(accessory);
+	    	break;
+       	case "DW6HD":  //600W Dimmer
+			this.setupLightbulbService(accessory);
+	    	break;
+       	case "DW3HL":  //Plug-In Dimmer
+			this.setupLightbulbService(accessory);
+	    	break;
+	    	
+    	case "DW15R": //Tamper Resistant Outlet
+			this.setupOutletService(accessory);
+	    	break;
+    	case "DW15A": //Plug-in Outlet (1/2 HP)
+			this.setupOutletService(accessory);
+	    	break;
+    	case "DW15P": //Pluig-in Outlet (3/4 HP)
+			this.setupOutletService(accessory);
+	    	break;
+	    	
+    	default:  //Set up anything else as a simple switch (i.e. - DW15S, etc)
+    		this.setupSwitchService(accessory);
+    		break;
     }
       
   }
+ 
+  
+ async setupSwitchService(accessory){
+	  	this.log('  -Setting up device as Switch:', accessory.displayName);
+	  
+	  	// get device and token out of context to update status
+	    const device = accessory.context.device
+	    const token = accessory.context.token
+	    const status = await this.getStatus(device, token)
+
+	    // get the accessory service, if not add it
+	    const service =
+	      accessory.getService(Service.Switch, device.name) ||
+	      accessory.addService(Service.Switch, device.name);
+	    
+	    // add handlers for on/off characteristic, set initial value
+	    service
+	      .getCharacteristic(Characteristic.On)
+	      .on('get', this.onGetPower(service, device, token).bind(this))
+	      .on('set', this.onSetPower(service, device, token).bind(this))
+	      .updateValue(status.power === 'ON' ? true : false);
+}
+  
+ async setupOutletService(accessory){
+	  	this.log('  -Setting up device as Outlet:', accessory.displayName);
+	  
+	  	// get device and token out of context to update status
+	    const device = accessory.context.device
+	    const token = accessory.context.token
+	    const status = await this.getStatus(device, token)
+
+	    // get the accessory service, if not add it
+	    const service =
+	      accessory.getService(Service.Outlet, device.name) ||
+	      accessory.addService(Service.Outlet, device.name);
+	    
+	    // add handlers for on/off characteristic, set initial value
+	    service
+	      .getCharacteristic(Characteristic.On)
+	      .on('get', this.onGetPower(service, device, token).bind(this))
+	      .on('set', this.onSetPower(service, device, token).bind(this))
+	      .updateValue(status.power === 'ON' ? true : false);
+}
   
   async setupLightbulbService(accessory){
-	  	this.log('Setting up device as a Lightbulb:', accessory.displayName);
+	  	this.log('  -Setting up device as Lightbulb:', accessory.displayName);
 	  
 	  	// get device and token out of context to update status
 	    const device = accessory.context.device
@@ -296,12 +360,10 @@ class LevitonDecoraSmartPlatform {
 	        minStep: 1,
 	      })
 	      .updateValue(status.brightness);
-	      
-  }
-  
+  }  
   
   async setupFanService(accessory) {
-	  	this.log('Setting up device as a Fan:', accessory.displayName);
+	  	this.log('  -Setting up device as Fan:', accessory.displayName);
 
 	  	// get device and token out of context to update status
 	    const device = accessory.context.device
@@ -331,11 +393,7 @@ class LevitonDecoraSmartPlatform {
 	        minStep: status.minLevel,
 	      })
 	      .updateValue(status.brightness);
-	      this.log('Device Status:', status);
   }
-  
-  
-  
 
   // remove accessories and unregister
   removeAccessories() {
