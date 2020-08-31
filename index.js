@@ -147,6 +147,52 @@ class LevitonDecoraSmartPlatform {
     }
   }
 
+  
+  
+
+  // switch RotationSpeed getter closure with service, device and token
+  onGetRotationSpeed(service, device, token) {
+    return function (callback) {
+      this.log('onGetRotationSpeed', device.name)
+      return Leviton.getIotSwitch({
+        switchID: device.id,
+        token,
+      })
+        .then((res) => {
+          this.log('onGetRotationSpeed callback', res.brightness)
+          service
+            .getCharacteristic(Characteristic.RotationSpeed)
+            .updateValue(res.brightness)
+          callback(null, res.brightness)
+        })
+        .catch((err) => {
+          this.log('error', err)
+        })
+    }
+  }
+
+  // switch RotationSpeed setter closure with service, device and token
+  onSetRotationSpeed(service, device, token) {
+    return function (brightness, callback) {
+      this.log('onSetRotationSpeed', device.name, brightness)
+      return Leviton.putIotSwitch({
+        switchID: device.id,
+        brightness,
+        token,
+      })
+        .then((res) => {
+          this.log('onSetRotationSpeed callback', res.brightness)
+          service
+            .getCharacteristic(Characteristic.RotationSpeed)
+            .updateValue(res.brightness)
+          callback()
+        })
+        .catch((err) => {
+          this.log('error', err)
+        })
+    }
+  }
+  
   async addAccessory(device, token) {
     this.log(`addAccessory ${device.name}`)
 
@@ -201,31 +247,139 @@ class LevitonDecoraSmartPlatform {
     // get device and token out of context to update status
     const device = accessory.context.device
     const token = accessory.context.token
-    const status = await this.getStatus(device, token)
+    
+    //Get the model number
+    this.log('  -Device Model: ', device.model)
+    
+    
+    switch (device.model) {
+    	case "DW4SF":  //Fan Speed Control
+  			this.setupFanService(accessory);
+	    	break;
+    	case "DWVAA":  //Voice Dimmer with Amazon Alexa
+      case "DW1KD":  //1000W Dimmer
+      case "DW6HD":  //600W Dimmer
+      case "DW3HL":  //Plug-In Dimmer
+			  this.setupLightbulbService(accessory);
+	    	break;
+    	case "DW15R": //Tamper Resistant Outlet
+    	case "DW15A": //Plug-in Outlet (1/2 HP)
+    	case "DW15P": //Pluig-in Outlet (3/4 HP)
+  			this.setupOutletService(accessory);
+	    	break;    	
+    	default:  //Set up anything else as a simple switch (i.e. - DW15S, etc)
+    		this.setupSwitchService(accessory);
+    		break;
+    }
+      
+  }
+  
+  async setupSwitchService(accessory){
+	  	this.log('  -Setting up device as Switch:', accessory.displayName);
+	  
+	  	// get device and token out of context to update status
+	    const device = accessory.context.device
+	    const token = accessory.context.token
+	    const status = await this.getStatus(device, token)
 
-    // get the accessory service, if not add it
-    const service =
-      accessory.getService(Service.Lightbulb, device.name) ||
-      accessory.addService(Service.Lightbulb, device.name)
+	    // get the accessory service, if not add it
+	    const service =
+	      accessory.getService(Service.Switch, device.name) ||
+	      accessory.addService(Service.Switch, device.name);
+	    
+	    // add handlers for on/off characteristic, set initial value
+	    service
+	      .getCharacteristic(Characteristic.On)
+	      .on('get', this.onGetPower(service, device, token).bind(this))
+	      .on('set', this.onSetPower(service, device, token).bind(this))
+	      .updateValue(status.power === 'ON' ? true : false); 
+  }
+  
+  async setupOutletService(accessory){
+	  	this.log('  -Setting up device as Outlet:', accessory.displayName);
+	  
+	  	// get device and token out of context to update status
+	    const device = accessory.context.device
+	    const token = accessory.context.token
+	    const status = await this.getStatus(device, token)
 
-    // add handlers for on/off characteristic, set initial value
-    service
-      .getCharacteristic(Characteristic.On)
-      .on('get', this.onGetPower(service, device, token).bind(this))
-      .on('set', this.onSetPower(service, device, token).bind(this))
-      .updateValue(status.power === 'ON' ? true : false)
+	    // get the accessory service, if not add it
+	    const service =
+	      accessory.getService(Service.Outlet, device.name) ||
+	      accessory.addService(Service.Outlet, device.name);
+	    
+	    // add handlers for on/off characteristic, set initial value
+	    service
+	      .getCharacteristic(Characteristic.On)
+	      .on('get', this.onGetPower(service, device, token).bind(this))
+	      .on('set', this.onSetPower(service, device, token).bind(this))
+	      .updateValue(status.power === 'ON' ? true : false);
+  }
+  
+  async setupLightbulbService(accessory){
+	  	this.log('  -Setting up device as Lightbulb:', accessory.displayName);
+	  
+	  	// get device and token out of context to update status
+	    const device = accessory.context.device
+	    const token = accessory.context.token
+	    const status = await this.getStatus(device, token)
 
-    // set handlers for brightness, set initial value and min/max bounds
-    service
-      .getCharacteristic(Characteristic.Brightness)
-      .on('get', this.onGetBrightness(service, device, token).bind(this))
-      .on('set', this.onSetBrightness(service, device, token).bind(this))
-      .setProps({
-        minValue: status.minLevel,
-        maxValue: status.maxLevel,
-        minStep: 1,
-      })
-      .updateValue(status.brightness)
+	    // get the accessory service, if not add it
+	    const service =
+	      accessory.getService(Service.Lightbulb, device.name) ||
+	      accessory.addService(Service.Lightbulb, device.name);
+	    
+	    // add handlers for on/off characteristic, set initial value
+	    service
+	      .getCharacteristic(Characteristic.On)
+	      .on('get', this.onGetPower(service, device, token).bind(this))
+	      .on('set', this.onSetPower(service, device, token).bind(this))
+	      .updateValue(status.power === 'ON' ? true : false);
+
+	    // set handlers for brightness, set initial value and min/max bounds
+	    service
+	      .getCharacteristic(Characteristic.Brightness)
+	      .on('get', this.onGetBrightness(service, device, token).bind(this))
+	      .on('set', this.onSetBrightness(service, device, token).bind(this))
+	      .setProps({
+	        minValue: status.minLevel,
+	        maxValue: status.maxLevel,
+	        minStep: 1,
+	      })
+	      .updateValue(status.brightness);
+  }  
+  
+  async setupFanService(accessory) {
+	  	this.log('  -Setting up device as Fan:', accessory.displayName);
+
+	  	// get device and token out of context to update status
+	    const device = accessory.context.device
+	    const token = accessory.context.token
+	    const status = await this.getStatus(device, token)
+
+	    // get the accessory service, if not add it
+	    const service =
+	      accessory.getService(Service.Fan, device.name) ||
+	      accessory.addService(Service.Fan, device.name);
+	    
+	    // add handlers for on/off characteristic, set initial value
+	    service
+	      .getCharacteristic(Characteristic.On)
+	      .on('get', this.onGetPower(service, device, token).bind(this))
+	      .on('set', this.onSetPower(service, device, token).bind(this))
+	      .updateValue(status.power === 'ON' ? true : false);
+
+	    // set handlers for brightness, set initial value and min/max bounds
+	    service
+	      .getCharacteristic(Characteristic.RotationSpeed)
+	      .on('get', this.onGetRotationSpeed(service, device, token).bind(this))
+	      .on('set', this.onSetRotationSpeed(service, device, token).bind(this))
+	      .setProps({
+	        minValue: 0,
+	        maxValue: status.maxLevel,
+	        minStep: status.minLevel,
+	      })
+	      .updateValue(status.brightness);
   }
 
   // remove accessories and unregister
