@@ -254,40 +254,27 @@ class LevitonDecoraSmartPlatform {
     
     switch (device.model) {
     	case "DW4SF":  //Fan Speed Control
-			this.setupFanService(accessory);
+  			this.setupFanService(accessory);
 	    	break;
     	case "DWVAA":  //Voice Dimmer with Amazon Alexa
-			this.setupLightbulbService(accessory);
+      case "DW1KD":  //1000W Dimmer
+      case "DW6HD":  //600W Dimmer
+      case "DW3HL":  //Plug-In Dimmer
+			  this.setupLightbulbService(accessory);
 	    	break;
-       	case "DW1KD":  //1000W Dimmer
-			this.setupLightbulbService(accessory);
-	    	break;
-       	case "DW6HD":  //600W Dimmer
-			this.setupLightbulbService(accessory);
-	    	break;
-       	case "DW3HL":  //Plug-In Dimmer
-			this.setupLightbulbService(accessory);
-	    	break;
-	    	
     	case "DW15R": //Tamper Resistant Outlet
-			this.setupOutletService(accessory);
-	    	break;
     	case "DW15A": //Plug-in Outlet (1/2 HP)
-			this.setupOutletService(accessory);
-	    	break;
     	case "DW15P": //Pluig-in Outlet (3/4 HP)
-			this.setupOutletService(accessory);
-	    	break;
-	    	
+  			this.setupOutletService(accessory);
+	    	break;    	
     	default:  //Set up anything else as a simple switch (i.e. - DW15S, etc)
     		this.setupSwitchService(accessory);
     		break;
     }
       
   }
- 
   
- async setupSwitchService(accessory){
+  async setupSwitchService(accessory){
 	  	this.log('  -Setting up device as Switch:', accessory.displayName);
 	  
 	  	// get device and token out of context to update status
@@ -305,10 +292,10 @@ class LevitonDecoraSmartPlatform {
 	      .getCharacteristic(Characteristic.On)
 	      .on('get', this.onGetPower(service, device, token).bind(this))
 	      .on('set', this.onSetPower(service, device, token).bind(this))
-	      .updateValue(status.power === 'ON' ? true : false);
-}
+	      .updateValue(status.power === 'ON' ? true : false); 
+  }
   
- async setupOutletService(accessory){
+  async setupOutletService(accessory){
 	  	this.log('  -Setting up device as Outlet:', accessory.displayName);
 	  
 	  	// get device and token out of context to update status
@@ -327,7 +314,7 @@ class LevitonDecoraSmartPlatform {
 	      .on('get', this.onGetPower(service, device, token).bind(this))
 	      .on('set', this.onSetPower(service, device, token).bind(this))
 	      .updateValue(status.power === 'ON' ? true : false);
-}
+  }
   
   async setupLightbulbService(accessory){
 	  	this.log('  -Setting up device as Lightbulb:', accessory.displayName);
