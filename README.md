@@ -15,9 +15,9 @@ These models are tested, though any other WiFi model should work.
 ```
 "platforms": [
   {
-    "platform": "LevitonDecoraSmart"
+    "platform": "LevitonDecoraSmart",
     "email": "your@email.com",
-    "password": "supersecretpassword",
+    "password": "supersecretpassword"
   }
 ]
 ```
