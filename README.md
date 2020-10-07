@@ -10,8 +10,10 @@ These models are tested, though any other WiFi model should work.
 - DW4SF Fan Speed Controller
 
 ## Setup
+*You must use the main "My Leviton" login credientials.*
 - add `homebridge-leviton` in your Homebridge Config UI X web interface
 - Add to your config.json: 
+
 ```
 "platforms": [
   {
