@@ -43,12 +43,10 @@ class LevitonDecoraSmartPlatform {
       accessory.getService(Service.Lightbulb)
     const isFan = !!accessory.getService(Service.Fan)
 
-    if (isFan) {
-      service.getCharacteristic(Characteristic.RotationSpeed).updateValue(payload.brightness)
-    } else {
-      service.getCharacteristic(Characteristic.Brightness).updateValue(payload.brightness)
-    }
-
+    if (payload.brightness)
+      service
+        .getCharacteristic(isFan ? Characteristic.RotationSpeed : Characteristic.Brightness)
+        .updateValue(payload.brightness)
     service.getCharacteristic(Characteristic.On).updateValue(payload.power === 'ON')
   }
 
