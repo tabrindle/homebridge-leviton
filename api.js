@@ -105,6 +105,14 @@ function subscribe(login, devices, callback) {
     },
   })
 
+  ws.onclose = function onclose(ev) {
+    console.log('Socket connection closed', ev, Date.now())
+  }
+
+  ws.onopen = function onopen(ev) {
+    console.log('Socket connection opened', ev, Date.now())
+  }
+
   ws.onmessage = function onmessage(message) {
     const data = JSON.parse(message.data)
     if (data.type === 'challenge') {
