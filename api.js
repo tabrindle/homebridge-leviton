@@ -1,5 +1,7 @@
 require('isomorphic-fetch')
 
+const SockJS = require('sockjs-client')
+
 const baseURL = 'https://my.leviton.com/api'
 const toQueryString = (params) =>
   Object.keys(params)
@@ -85,6 +87,46 @@ function postPersonLogin({ email, password }) {
   }).then((res) => res.json())
 }
 
+function subscribe(login, devices, callback) {
+  const ws = new SockJS('https://my.leviton.com/socket', {
+    origin: 'https://my.leviton.com',
+    headers: {
+      'Sec-WebSocket-Key': 'J4AAFNBWV3zbd71kD72LMQ==',
+      'Sec-WebSocket-Extensions': 'permessage-deflate',
+      'Sec-WebSocket-Version': 13,
+      Accept: '*/*',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      Origin: 'https://my.leviton.com',
+      Connection: 'keep-alive, Upgrade',
+      Pragma: 'no-cache',
+      'Cache-Control': 'no-cache',
+      Upgrade: 'websocket',
+    },
+  })
+
+  ws.onmessage = function onmessage(message) {
+    const data = JSON.parse(message.data)
+    if (data.type === 'challenge') {
+      const response = [JSON.stringify({ token: login })]
+      ws.send(response)
+    }
+    if (data.type === 'status' && data.status === 'ready') {
+      devices.forEach((element) => {
+        ws.send([JSON.stringify({ type: 'subscribe', subscription: { modelName: 'IotSwitch', modelId: element.id } })])
+      })
+    }
+    if (data.type === 'notification' && data.notification.data.power) {
+      const payload = {
+        id: data.notification.modelId,
+        power: data.notification.data.power,
+      }
+      if (data.notification.data.brightness) payload.brightness = data.notification.data.brightness
+      callback(payload)
+    }
+  }
+}
+
 module.exports = {
   getIotSwitch,
   getPersonResidentialPermissions,
@@ -92,4 +134,5 @@ module.exports = {
   getResidentialAccounts,
   postPersonLogin,
   putIotSwitch,
+  subscribe,
 }
