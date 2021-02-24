@@ -87,7 +87,7 @@ function postPersonLogin({ email, password }) {
   }).then((res) => res.json())
 }
 
-function subscribe(login, devices, callback) {
+function subscribe(login, devices, callback, scope) {
   const ws = new SockJS('https://my.leviton.com/socket', {
     origin: 'https://my.leviton.com',
     headers: {
@@ -106,11 +106,11 @@ function subscribe(login, devices, callback) {
   })
 
   ws.onclose = function onclose(ev) {
-    console.log('Socket connection closed', ev, Date.now())
+    scope.log('Socket connection closed', ev)
   }
 
   ws.onopen = function onopen(ev) {
-    console.log('Socket connection opened', ev, Date.now())
+    scope.log('Socket connection opened', ev)
   }
 
   ws.onmessage = function onmessage(message) {
