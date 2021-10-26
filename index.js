@@ -1,11 +1,12 @@
 let Service, Characteristic, Accessory, UUID
 const Leviton = require('./api.js')
+const logs = require('./logs.js')
 const PLUGIN_NAME = 'homebridge-leviton'
 const PLATFORM_NAME = 'LevitonDecoraSmart'
 
 class LevitonDecoraSmartPlatform {
   constructor(log, config, api) {
-    this.log = log
+    this.logger = log
     this.config = config
     this.api = api
     this.accessories = []
@@ -15,6 +16,12 @@ class LevitonDecoraSmartPlatform {
       return
     }
 
+    if (this.config.advancedOptions.logLevel) {
+      this.logs = new Logs(logger, this.config.advancedOptions.logLevel)
+    } else {
+      this.logs = new Logs(logger);
+    }
+
     if (!config.email || !config.password) {
       this.log.error('email and password are required in config.json')
       return
@@ -22,7 +29,7 @@ class LevitonDecoraSmartPlatform {
 
     // on launch, init api, iterate over new devices
     api.on('didFinishLaunching', async () => {
-      this.log('didFinishLaunching')
+      this.logs.debug('didFinishLaunching')
       const { devices = [], token } = await this.initialize(config)
       devices.forEach((device) => {
         if (!this.accessories.find((acc) => acc.context.device.serial === device.serial)) {
@@ -36,7 +43,7 @@ class LevitonDecoraSmartPlatform {
     const accessory = this.accessories.find((acc) => acc.context.device.id === payload.id)
     const { id, power, brightness } = payload
 
-    this.log(`Socket: ${accessory.displayName} (${id}): ${power} ${brightness ? `${brightness}%` : ''}`)
+    this.logs.debug(`Socket: ${accessory.displayName} (${id}): ${power} ${brightness ? `${brightness}%` : ''}`)
 
     if (!accessory) return
 
@@ -56,7 +63,7 @@ class LevitonDecoraSmartPlatform {
 
   // init function that sets up personID, accountID and residenceID to return token+devices
   async initialize() {
-    this.log('initialize')
+    this.logs.warn('initialize')
 
     const login = await Leviton.postPersonLogin({
       email: this.config['email'],
@@ -90,12 +97,12 @@ class LevitonDecoraSmartPlatform {
         token,
       })
         .then((res) => {
-          this.log('onGetPower', device.name, res.power)
+          this.logs.debug('onGetPower', device.name, res.power)
           service.getCharacteristic(Characteristic.On).updateValue(res.power === 'ON')
           callback(null, res.power === 'ON')
         })
         .catch((err) => {
-          this.log('error', err)
+          this.logs.error('error', err)
         })
     }
   }
@@ -109,12 +116,12 @@ class LevitonDecoraSmartPlatform {
         token,
       })
         .then((res) => {
-          this.log('onSetPower', device.name, res.power)
+          this.logs.info('onSetPower', device.name, res.power)
           service.getCharacteristic(Characteristic.On).updateValue(res.power === 'ON')
           callback()
         })
         .catch((err) => {
-          this.log('error', err)
+          this.logs.error('error', err)
         })
     }
   }
@@ -127,12 +134,12 @@ class LevitonDecoraSmartPlatform {
         token,
       })
         .then((res) => {
-          this.log('onGetBrightness', device.name, `${res.brightness}%`)
+          this.logs.debug('onGetBrightness', device.name, `${res.brightness}%`)
           service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
           callback(null, res.brightness)
         })
         .catch((err) => {
-          this.log('error', err)
+          this.logs.error('error', err)
         })
     }
   }
@@ -146,12 +153,12 @@ class LevitonDecoraSmartPlatform {
         token,
       })
         .then((res) => {
-          this.log('onSetBrightness', device.name, `${res.brightness}%`)
+          this.logs.info('onSetBrightness', device.name, `${res.brightness}%`)
           service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
           callback()
         })
         .catch((err) => {
-          this.log('error', err)
+          this.logs.error('error', err)
         })
     }
   }
@@ -164,12 +171,12 @@ class LevitonDecoraSmartPlatform {
         token,
       })
         .then((res) => {
-          this.log('onGetRotationSpeed', device.name, `${res.brightness}%`)
+          this.logs.debug('onGetRotationSpeed', device.name, `${res.brightness}%`)
           service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
           callback(null, res.brightness)
         })
         .catch((err) => {
-          this.log('error', err)
+          this.logs.error('error', err)
         })
     }
   }
@@ -183,18 +190,18 @@ class LevitonDecoraSmartPlatform {
         token,
       })
         .then((res) => {
-          this.log('onSetRotationSpeed', device.name, `${res.brightness}%`)
+          this.logs.info('onSetRotationSpeed', device.name, `${res.brightness}%`)
           service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
           callback()
         })
         .catch((err) => {
-          this.log('error', err)
+          this.logs.error('error', err)
         })
     }
   }
 
   async addAccessory(device, token) {
-    this.log(`addAccessory ${device.name}`)
+    this.log.info(`addAccessory ${device.name}`)
 
     // generate uuid based on device serial and create accessory
     const uuid = UUID.generate(device.serial)
@@ -219,19 +226,19 @@ class LevitonDecoraSmartPlatform {
 
     // add configured accessory
     this.accessories.push(accessory)
-    this.log(`Finished adding accessory ${device.name}`)
+    this.logs.info(`Finished adding accessory ${device.name}`)
   }
 
   // set up cached accessories
   async configureAccessory(accessory) {
-    this.log('configureAccessory', accessory.displayName)
+    this.logs.info('configureAccessory', accessory.displayName)
     this.setupService(accessory)
     this.accessories.push(accessory)
   }
 
   // fetch the status of a device to populate power state and brightness
   async getStatus(device, token) {
-    this.log('getStatus', device.name)
+    this.logs.info('getStatus', device.name)
     return Leviton.getIotSwitch({
       switchID: device.id,
       token,
@@ -240,14 +247,14 @@ class LevitonDecoraSmartPlatform {
 
   // setup service function
   async setupService(accessory) {
-    this.log('setupService', accessory.displayName)
+    this.logs.info('setupService', accessory.displayName)
 
     // get device and token out of context to update status
     const device = accessory.context.device
     const token = accessory.context.token
 
     // Get the model number
-    this.log('Device Model:', device.model)
+    this.logs.info('Device Model:', device.model)
 
     switch (device.model) {
       case 'DW4SF': // Fan Speed Control
@@ -272,7 +279,7 @@ class LevitonDecoraSmartPlatform {
   }
 
   async setupSwitchService(accessory) {
-    this.log('Setting up device as Switch:', accessory.displayName)
+    this.logs.info('Setting up device as Switch:', accessory.displayName)
 
     // get device and token out of context to update status
     const device = accessory.context.device
@@ -292,7 +299,7 @@ class LevitonDecoraSmartPlatform {
   }
 
   async setupOutletService(accessory) {
-    this.log('Setting up device as Outlet:', accessory.displayName)
+    this.logs.info('Setting up device as Outlet:', accessory.displayName)
 
     // get device and token out of context to update status
     const device = accessory.context.device
@@ -312,7 +319,7 @@ class LevitonDecoraSmartPlatform {
   }
 
   async setupLightbulbService(accessory) {
-    this.log('Setting up device as Lightbulb:', accessory.displayName)
+    this.logs.info('Setting up device as Lightbulb:', accessory.displayName)
 
     // get device and token out of context to update status
     const device = accessory.context.device
@@ -344,7 +351,7 @@ class LevitonDecoraSmartPlatform {
   }
 
   async setupFanService(accessory) {
-    this.log('Setting up device as Fan:', accessory.displayName)
+    this.logs.info('Setting up device as Fan:', accessory.displayName)
 
     // get device and token out of context to update status
     const device = accessory.context.device
@@ -376,7 +383,7 @@ class LevitonDecoraSmartPlatform {
 
   // remove accessories and unregister
   removeAccessories() {
-    this.log.info('Removing all accessories')
+    this.logs.info('Removing all accessories')
     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.accessories)
     this.accessories.splice(0, this.accessories.length)
   }
