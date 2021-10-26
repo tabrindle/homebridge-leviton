@@ -16,14 +16,14 @@ class LevitonDecoraSmartPlatform {
       return
     }
 
-    if (this.config.advancedOptions.logLevel) {
-      this.logs = new Logs(logger, this.config.advancedOptions.logLevel)
+    if (this.config.debug) {
+      this.logs = new logs.Logs(this.logger, 4)
     } else {
-      this.logs = new Logs(logger);
+      this.logs = new logs.Logs(this.logger);
     }
 
     if (!config.email || !config.password) {
-      this.log.error('email and password are required in config.json')
+      this.logs.error('email and password are required in config.json')
       return
     }
 

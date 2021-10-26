@@ -106,11 +106,11 @@ function subscribe(login, devices, callback, scope) {
   })
 
   ws.onclose = function onclose(ev) {
-    scope.log('Socket connection closed', ev)
+    scope.logs.info('Socket connection closed', ev)
   }
 
   ws.onopen = function onopen(ev) {
-    scope.log('Socket connection opened', ev)
+    scope.logs.info('Socket connection opened', ev)
   }
 
   ws.onmessage = function onmessage(message) {
