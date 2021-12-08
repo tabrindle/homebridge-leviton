@@ -256,6 +256,7 @@ class LevitonDecoraSmartPlatform {
       case 'DWVAA': // Voice Dimmer with Amazon Alexa
       case 'DW1KD': // 1000W Dimmer
       case 'DW6HD': // 600W Dimmer
+      case 'D26HD': // 600W Dimmer (2nd Gen)
       case 'DW3HL': // Plug-In Dimmer
         this.setupLightbulbService(accessory)
         break
