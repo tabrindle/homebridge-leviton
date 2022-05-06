@@ -1,18 +1,24 @@
 # homebridge-leviton
+
 Homebridge plugin for Leviton Decora Smart devices
 
 ## Supports
+
 These models are tested, though any other WiFi model should work.
+
 - DW6HD 600W Dimmer
+- D26HD 600W Dimmer (2nd Gen)
 - DW1KD 1000W Dimmer
-- DW3HL Wi-Fi Plugin Dimmer 
+- DW3HL Wi-Fi Plugin Dimmer
 - DW15P Wi-Fi Plugin Outlet
 - DW4SF Fan Speed Controller
 
 ## Setup
-*You must use the main "My Leviton" login credientials.*
+
+_You must use the main "My Leviton" login credientials._
+
 - add `homebridge-leviton` in your Homebridge Config UI X web interface
-- Add to your config.json: 
+- Add to your config.json:
 
 ```
 "platforms": [
@@ -25,6 +31,7 @@ These models are tested, though any other WiFi model should work.
 ```
 
 ## Features
+
 - Automatically discovers devices on your My Leviton app
 - On/Off
 - Brightness (max + min limits)
