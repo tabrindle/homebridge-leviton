@@ -46,7 +46,7 @@ function putIotSwitch({ switchID, power, brightness, token }) {
   }).then((res) => res.json())
 }
 
-// uses a personID/userId to get accocuntID
+// uses a personID/userId to get accountID
 function getPersonResidentialPermissions({ personID, token }) {
   return fetch(`${baseURL}/Person/${personID}/residentialPermissions`, {
     method: 'GET',

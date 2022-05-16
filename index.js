@@ -77,7 +77,14 @@ class LevitonDecoraSmartPlatform {
       token,
     })
 
-    Leviton.subscribe(login, devices, this.subscriptionCallback.bind(this), this)
+    try {
+      if (!Array.isArray(devices) || devices.length < 1) {
+        throw new Error(`No devices found for residenceID: ${residenceID}`)
+      }
+      Leviton.subscribe(login, devices, this.subscriptionCallback.bind(this), this)
+    } catch (e) {
+      this.log('Error subscribing devices to websocket updates:', e)
+    }
 
     return { devices, token }
   }
@@ -257,12 +264,13 @@ class LevitonDecoraSmartPlatform {
       case 'DW1KD': // 1000W Dimmer
       case 'DW6HD': // 600W Dimmer
       case 'D26HD': // 600W Dimmer (2nd Gen)
+      case 'D23LP': // Plug-In Dimmer (2nd Gen)
       case 'DW3HL': // Plug-In Dimmer
         this.setupLightbulbService(accessory)
         break
       case 'DW15R': // Tamper Resistant Outlet
       case 'DW15A': // Plug-in Outlet (1/2 HP)
-      case 'DW15P': // Pluig-in Outlet (3/4 HP)
+      case 'DW15P': // Plug-in Outlet (3/4 HP)
         this.setupOutletService(accessory)
         break
       default:
