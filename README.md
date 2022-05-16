@@ -10,12 +10,13 @@ These models are tested, though any other WiFi model should work.
 - D26HD 600W Dimmer (2nd Gen)
 - DW1KD 1000W Dimmer
 - DW3HL Wi-Fi Plugin Dimmer
+- D23LP Wi-Fi Plugin Dimmer (2nd Gen)
 - DW15P Wi-Fi Plugin Outlet
 - DW4SF Fan Speed Controller
 
 ## Setup
 
-_You must use the main "My Leviton" login credientials._
+_You must use the main "My Leviton" login credentials._
 
 - add `homebridge-leviton` in your Homebridge Config UI X web interface
 - Add to your config.json:
