@@ -68,6 +68,16 @@ function getResidentialAccounts({ accountID, token }) {
   }).then((res) => res.json())
 }
 
+function getResidentialAccountsV2({ residenceObjectID, token }) {
+  return fetch(`${baseURL}/ResidentialAccounts/${residenceObjectID}/residences`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Access-Token': token,
+    },
+  }).then((res) => res.json())
+}
+
 // obtain a user token to use in X-Access-Token header on all requests
 function postPersonLogin({ email, password }) {
   const query = toQueryString({
@@ -144,6 +154,7 @@ module.exports = {
   getPersonResidentialPermissions,
   getResidenceIotSwitches,
   getResidentialAccounts,
+  getResidentialAccountsV2,
   postPersonLogin,
   putIotSwitch,
   subscribe,
