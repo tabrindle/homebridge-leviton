@@ -80,7 +80,7 @@ class LevitonDecoraSmartPlatform {
 
     try {
       if (!Array.isArray(devices) || devices.length < 1) {
-        console.log('No devices found for primary residence id. Trying residence v2')
+        this.log('No devices found for primary residence id. Trying residence v2')
         const accountsV2Response = await Leviton.getResidentialAccountsV2({
           residenceObjectID,
           token,
@@ -93,7 +93,9 @@ class LevitonDecoraSmartPlatform {
         })
 
         if (!Array.isArray(devices) || devices.length < 1) {
-          throw new Error(`No devices found for residenceID: ${residenceID} or residenceIDV2 method: ${residenceObjectID}`)
+          throw new Error(
+            `No devices found for residenceID: ${residenceID} or residenceIDV2 method: ${residenceObjectID}`
+          )
         }
         Leviton.subscribe(login, devices, this.subscriptionCallback.bind(this), this)
       }
