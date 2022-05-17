@@ -35,12 +35,16 @@ class LevitonDecoraSmartPlatform {
     // on launch, init api, iterate over new devices
     api.on('didFinishLaunching', async () => {
       this.log.debug('didFinishLaunching')
-      const { devices = [], token } = await this.initialize(config)
-      devices.forEach((device) => {
-        if (!this.accessories.find((acc) => acc.context.device.serial === device.serial)) {
-          this.addAccessory(device, token)
-        }
-      })
+      const { devices, token } = await this.initialize(config)
+      if (Array.isArray(devices) && devices.length > 0) {
+        devices.forEach((device) => {
+          if (!this.accessories.find((acc) => acc.context.device.serial === device.serial)) {
+            this.addAccessory(device, token)
+          }
+        })
+      } else {
+        this.log.error('Unable to initialize: no devices found')
+      }
     })
   }
 
@@ -118,11 +122,15 @@ class LevitonDecoraSmartPlatform {
           token,
         })
 
-        residenceID = accountsV2Response[0].id
-        devices = await Leviton.getResidenceIotSwitches({
-          residenceID,
-          token,
-        })
+        if (accountsV2Response[0]) {
+          residenceID = accountsV2Response[0].id
+          devices = await Leviton.getResidenceIotSwitches({
+            residenceID,
+            token,
+          })
+        } else {
+          throw new Error('No residenceIDs found')
+        }
 
         if (!Array.isArray(devices) || devices.length < 1) {
           throw new Error(
