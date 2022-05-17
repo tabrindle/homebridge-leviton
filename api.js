@@ -1,5 +1,4 @@
-require('isomorphic-fetch')
-
+const fetch = require('node-fetch')
 const SockJS = require('sockjs-client')
 
 const baseURL = 'https://my.leviton.com/api'
@@ -116,15 +115,19 @@ function subscribe(login, devices, callback, scope) {
   })
 
   ws.onclose = function onclose(ev) {
-    scope.log('Socket connection closed', ev)
+    scope.log.error(`Socket connection closed: ${JSON.stringify(ev)}`)
   }
 
   ws.onopen = function onopen(ev) {
-    scope.log('Socket connection opened', ev)
+    scope.log.debug(`Socket connection opened: ${JSON.stringify(ev)}`)
   }
 
   ws.onmessage = function onmessage(message) {
-    const data = JSON.parse(message.data)
+    try {
+      var data = JSON.parse(message.data)
+    } catch (err) {
+      scope.log.error(`Received bad json: ${String(message.data)}`)
+    }
     if (data.type === 'challenge') {
       const response = [JSON.stringify({ token: login })]
       ws.send(response)
