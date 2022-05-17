@@ -5,6 +5,11 @@
   "schema": {
     "type": "object",
     "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Leviton"
+      },
       "email": {
         "title": "email",
         "type": "string",
@@ -20,7 +25,51 @@
         "x-schema-form": {
           "type": "password"
         }
+      },
+      "loglevel": {
+        "title": "Log Level",
+        "type": "string",
+        "required": false,
+        "oneOf": [
+          {
+            "title": "Info",
+            "enum": [
+              "info"
+            ]
+          },
+          {
+            "title": "Debug",
+            "enum": [
+              "debug"
+            ]
+          },
+          {
+            "title": "Error",
+            "enum": [
+              "error"
+            ]
+          },
+          {
+            "title": "Warn",
+            "enum": [
+              "warn"
+            ]
+          }
+        ]
       }
     }
-  }
+  },
+  "layout": [
+    "email",
+    "password",
+    {
+      "type": "fieldset",
+      "title": "Advanced Settings",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "loglevel"
+      ]
+    }
+  ]
 }
