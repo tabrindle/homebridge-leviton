@@ -1,5 +1,4 @@
-require('isomorphic-fetch')
-
+const fetch = require('node-fetch')
 const SockJS = require('sockjs-client')
 
 const baseURL = 'https://my.leviton.com/api'

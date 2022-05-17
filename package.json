@@ -9,8 +9,8 @@
   "author": "tabrindle@gmail.com",
   "license": "MIT",
   "dependencies": {
-    "isomorphic-fetch": "^2.2.1",
-    "sockjs-client": "^1.5.0"
+    "node-fetch": "^2.6.7",
+    "sockjs-client": "^1.6.0"
   },
   "engines": {
     "node": ">=14.0.0",
