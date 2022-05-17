@@ -5,6 +5,11 @@
   "schema": {
     "type": "object",
     "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Leviton"
+      },
       "email": {
         "title": "email",
         "type": "string",
@@ -53,5 +58,18 @@
         ]
       }
     }
-  }
+  },
+  "layout": [
+    "email",
+    "password",
+    {
+      "type": "fieldset",
+      "title": "Advanced Settings",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "loglevel"
+      ]
+    }
+  ]
 }
