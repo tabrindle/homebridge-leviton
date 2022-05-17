@@ -20,6 +20,37 @@
         "x-schema-form": {
           "type": "password"
         }
+      },
+      "loglevel": {
+        "title": "Log Level",
+        "type": "string",
+        "required": false,
+        "oneOf": [
+          {
+            "title": "Info",
+            "enum": [
+              "info"
+            ]
+          },
+          {
+            "title": "Debug",
+            "enum": [
+              "debug"
+            ]
+          },
+          {
+            "title": "Error",
+            "enum": [
+              "error"
+            ]
+          },
+          {
+            "title": "Warn",
+            "enum": [
+              "warn"
+            ]
+          }
+        ]
       }
     }
   }
