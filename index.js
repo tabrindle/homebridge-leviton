@@ -68,20 +68,37 @@ class LevitonDecoraSmartPlatform {
       token,
     })
     const accountID = permissions[0].residentialAccountId
-    const { primaryResidenceId: residenceID } = await Leviton.getResidentialAccounts({
+    var { primaryResidenceId: residenceID, id: residenceObjectID } = await Leviton.getResidentialAccounts({
       accountID,
       token,
     })
-    const devices = await Leviton.getResidenceIotSwitches({
+
+    var devices = await Leviton.getResidenceIotSwitches({
       residenceID,
       token,
     })
 
     try {
       if (!Array.isArray(devices) || devices.length < 1) {
-        throw new Error(`No devices found for residenceID: ${residenceID}`)
+        this.log('No devices found for primary residence id. Trying residence v2')
+        const accountsV2Response = await Leviton.getResidentialAccountsV2({
+          residenceObjectID,
+          token,
+        })
+
+        residenceID = accountsV2Response[0].id
+        devices = await Leviton.getResidenceIotSwitches({
+          residenceID,
+          token,
+        })
+
+        if (!Array.isArray(devices) || devices.length < 1) {
+          throw new Error(
+            `No devices found for residenceID: ${residenceID} or residenceIDV2 method: ${residenceObjectID}`
+          )
+        }
+        Leviton.subscribe(login, devices, this.subscriptionCallback.bind(this), this)
       }
-      Leviton.subscribe(login, devices, this.subscriptionCallback.bind(this), this)
     } catch (e) {
       this.log('Error subscribing devices to websocket updates:', e)
     }
