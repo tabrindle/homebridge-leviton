@@ -27,6 +27,7 @@ _You must use the main "My Leviton" login credentials._
     "platform": "LevitonDecoraSmart",
     "email": "your@email.com",
     "password": "supersecretpassword"
+    "loglevel"" "info" // this is optional, info is default. debug for more, warn or error for less
   }
 ]
 ```
@@ -37,3 +38,4 @@ _You must use the main "My Leviton" login credentials._
 - On/Off
 - Brightness (max + min limits)
 - Shows serial/model number
+- varying log level independent of homebridge
