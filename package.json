@@ -1,6 +1,6 @@
 {
   "name": "homebridge-leviton",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A homebridge plugin for Leviton Decora Smart devices",
   "main": "index.js",
   "keywords": [
