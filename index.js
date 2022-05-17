@@ -91,7 +91,7 @@ class LevitonDecoraSmartPlatform {
       this.log.error(`Failed to get leviton accountID: ${err.message}`)
     }
     try {
-      var { primaryResidenceId: residenceID } = await Leviton.getResidentialAccounts({
+      var { primaryResidenceId: residenceID, id: residenceObjectID } = await Leviton.getResidentialAccounts({
         accountID,
         token,
       })
