@@ -76,6 +76,7 @@ class LevitonDecoraSmartPlatform {
         password: this.config['password'],
       })
       var { id: token, userId: personID } = login
+      this.log.debug(`personID: ${personID}, hasToken: ${!!token}`)
     } catch (err) {
       this.log.error(`Failed to login to leviton: ${err.message}`)
     }
@@ -85,6 +86,7 @@ class LevitonDecoraSmartPlatform {
         token,
       })
       var accountID = permissions[0].residentialAccountId
+      this.log.debug(`accountID: ${accountID}`)
     } catch (err) {
       this.log.error(`Failed to get leviton accountID: ${err.message}`)
     }
@@ -93,6 +95,7 @@ class LevitonDecoraSmartPlatform {
         accountID,
         token,
       })
+      this.log.debug(`residenceID: ${residenceID}`)
     } catch (err) {
       this.log.error(`Failed to get leviton residenceID: ${err.message}`)
     }
@@ -101,6 +104,7 @@ class LevitonDecoraSmartPlatform {
         residenceID,
         token,
       })
+      this.log.debug(`devices: ${JSON.stringify(devices)}`)
     } catch (err) {
       this.log.error(`Failed to get leviton devices: ${err.message}`)
     }
