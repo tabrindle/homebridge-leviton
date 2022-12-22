@@ -32,6 +32,8 @@ class LevitonDecoraSmartPlatform {
       return
     }
 
+    const excludeDevices = config.homeKitModels.map(name => name.toUpperCase())
+    
     // on launch, init api, iterate over new devices
     api.on('didFinishLaunching', async () => {
       this.log.debug('didFinishLaunching')
@@ -39,7 +41,9 @@ class LevitonDecoraSmartPlatform {
       if (Array.isArray(devices) && devices.length > 0) {
         devices.forEach((device) => {
           if (!this.accessories.find((acc) => acc.context.device.serial === device.serial)) {
+            if (!excludeDevices.includes(device.model)){
             this.addAccessory(device, token)
+            }
           }
         })
       } else {
