@@ -20,6 +20,13 @@
         "x-schema-form": {
           "type": "password"
         }
+      },
+      "homeKitModels": {
+        "type": "array",
+        "description": "List of models with native HomeKit support",
+        "items": {
+          "type": "string"
+        }
       }
     }
   }
