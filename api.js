@@ -1,151 +1,188 @@
-const fetch = require('node-fetch')
-const SockJS = require('sockjs-client')
+const fetch = require('node-fetch');
+const SockJS = require('sockjs-client');
 
-const baseURL = 'https://my.leviton.com/api'
+const baseURL = 'https://my.leviton.com/api';
 const toQueryString = (params) =>
   Object.keys(params)
-    .map((key) => `${key}=${params[key]}`)
-    .join('&')
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+    .join('&');
 
-// returns a list of switches, given a residenceID
-function getResidenceIotSwitches({ residenceID, token }) {
-  return fetch(`${baseURL}/Residences/${residenceID}/iotSwitches`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
-    },
-  }).then((res) => res.json())
+// Get a list of switches for a residenceID
+async function getResidenceIotSwitches({ residenceID, token }) {
+  try {
+    const response = await fetch(`${baseURL}/Residences/${residenceID}/iotSwitches`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Access-Token': token,
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in getResidenceIotSwitches: ${error.message}`);
+    throw error;
+  }
 }
 
-// gets state of a given switchID
-function getIotSwitch({ switchID, token }) {
-  return fetch(`${baseURL}/IotSwitches/${switchID}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
-    },
-  }).then((res) => res.json())
+// Get the state of a specific switch
+async function getIotSwitch({ switchID, token }) {
+  try {
+    const response = await fetch(`${baseURL}/IotSwitches/${switchID}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Access-Token': token,
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in getIotSwitch: ${error.message}`);
+    throw error;
+  }
 }
 
-// updates the state of a given switch, especially power and brightness
-// power is an integer 1-100, power is a string, 'ON' or 'OFF'
-function putIotSwitch({ switchID, power, brightness, token }) {
-  const body = {}
-  if (brightness) body.brightness = brightness
-  if (power) body.power = power
-  return fetch(`${baseURL}/IotSwitches/${switchID}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
-    },
-  }).then((res) => res.json())
+// Update a switch's state (power and brightness)
+async function putIotSwitch({ switchID, power, brightness, token }) {
+  try {
+    const body = {};
+    if (brightness) body.brightness = brightness;
+    if (power) body.power = power;
+    const response = await fetch(`${baseURL}/IotSwitches/${switchID}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Access-Token': token,
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in putIotSwitch: ${error.message}`);
+    throw error;
+  }
 }
 
-// uses a personID/userId to get accountID
-function getPersonResidentialPermissions({ personID, token }) {
-  return fetch(`${baseURL}/Person/${personID}/residentialPermissions`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
-    },
-  }).then((res) => res.json())
+// Retrieve residential permissions using personID
+async function getPersonResidentialPermissions({ personID, token }) {
+  try {
+    const response = await fetch(`${baseURL}/Person/${personID}/residentialPermissions`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Access-Token': token,
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in getPersonResidentialPermissions: ${error.message}`);
+    throw error;
+  }
 }
 
-// use accountID to get residenceIDs
-function getResidentialAccounts({ accountID, token }) {
-  return fetch(`${baseURL}/ResidentialAccounts/${accountID}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
-    },
-  }).then((res) => res.json())
+// Use accountID to get residence details
+async function getResidentialAccounts({ accountID, token }) {
+  try {
+    const response = await fetch(`${baseURL}/ResidentialAccounts/${accountID}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Access-Token': token,
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in getResidentialAccounts: ${error.message}`);
+    throw error;
+  }
 }
 
-function getResidentialAccountsV2({ residenceObjectID, token }) {
-  return fetch(`${baseURL}/ResidentialAccounts/${residenceObjectID}/residences`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
-    },
-  }).then((res) => res.json())
+// Alternative method to get residence details (version 2)
+async function getResidentialAccountsV2({ residenceObjectID, token }) {
+  try {
+    const response = await fetch(`${baseURL}/ResidentialAccounts/${residenceObjectID}/residences`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Access-Token': token,
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in getResidentialAccountsV2: ${error.message}`);
+    throw error;
+  }
 }
 
-// obtain a user token to use in X-Access-Token header on all requests
-function postPersonLogin({ email, password }) {
-  const query = toQueryString({
-    include: 'user',
-  })
-  return fetch(`${baseURL}/Person/login?${query}`, {
-    method: 'POST',
-    body: JSON.stringify({
-      email,
-      loggedInVia: 'myLeviton',
-      password,
-      rememberMe: true,
-    }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  }).then((res) => res.json())
+// Obtain a user token for X-Access-Token header
+async function postPersonLogin({ email, password }) {
+  try {
+    const query = toQueryString({ include: 'user' });
+    const response = await fetch(`${baseURL}/Person/login?${query}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        loggedInVia: 'myLeviton',
+        password,
+        rememberMe: true,
+      }),
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+    });
+    return response.json();
+  } catch (error) {
+    console.error(`Error in postPersonLogin: ${error.message}`);
+    throw error;
+  }
 }
 
+// Subscribe to WebSocket notifications for device updates
 function subscribe(login, devices, callback, scope) {
   const ws = new SockJS('https://my.leviton.com/socket', {
     origin: 'https://my.leviton.com',
-    headers: {
-      'Sec-WebSocket-Key': 'J4AAFNBWV3zbd71kD72LMQ==',
-      'Sec-WebSocket-Extensions': 'permessage-deflate',
-      'Sec-WebSocket-Version': 13,
-      Accept: '*/*',
-      'Accept-Language': 'en-US,en;q=0.5',
-      'Accept-Encoding': 'gzip, deflate, br',
-      Origin: 'https://my.leviton.com',
-      Connection: 'keep-alive, Upgrade',
-      Pragma: 'no-cache',
-      'Cache-Control': 'no-cache',
-      Upgrade: 'websocket',
-    },
-  })
+  });
 
-  ws.onclose = function onclose(ev) {
-    scope.log.error(`Socket connection closed: ${JSON.stringify(ev)}`)
-  }
+  ws.onclose = (event) => {
+    scope.log.error(`Socket connection closed: ${JSON.stringify(event)}`);
+  };
 
-  ws.onopen = function onopen(ev) {
-    scope.log.debug(`Socket connection opened: ${JSON.stringify(ev)}`)
-  }
+  ws.onopen = (event) => {
+    scope.log.debug(`Socket connection opened: ${JSON.stringify(event)}`);
+    ws.send(JSON.stringify({ token: login }));
+  };
 
-  ws.onmessage = function onmessage(message) {
+  ws.onmessage = (message) => {
     try {
-      var data = JSON.parse(message.data)
-    } catch (err) {
-      scope.log.error(`Received bad json: ${String(message.data)}`)
-    }
-    if (data.type === 'challenge') {
-      const response = [JSON.stringify({ token: login })]
-      ws.send(response)
-    }
-    if (data.type === 'status' && data.status === 'ready') {
-      devices.forEach((element) => {
-        ws.send([JSON.stringify({ type: 'subscribe', subscription: { modelName: 'IotSwitch', modelId: element.id } })])
-      })
-    }
-    if (data.type === 'notification' && data.notification.data.power) {
-      const payload = {
-        id: data.notification.modelId,
-        power: data.notification.data.power,
+      const data = JSON.parse(message.data);
+      switch (data.type) {
+        case 'challenge':
+          ws.send(JSON.stringify({ token: login }));
+          break;
+        case 'status':
+          if (data.status === 'ready') {
+            devices.forEach((device) => {
+              ws.send(JSON.stringify({
+                type: 'subscribe',
+                subscription: { modelName: 'IotSwitch', modelId: device.id },
+              }));
+            });
+          }
+          break;
+        case 'notification':
+          if (data.notification?.data?.power) {
+            const payload = {
+              id: data.notification.modelId,
+              power: data.notification.data.power,
+              brightness: data.notification.data.brightness,
+            };
+            callback(payload);
+          }
+          break;
       }
-      if (data.notification.data.brightness) payload.brightness = data.notification.data.brightness
-      callback(payload)
+    } catch (error) {
+      scope.log.error(`Error processing WebSocket message: ${error.message}`);
     }
-  }
+  };
 }
 
 module.exports = {
@@ -157,4 +194,4 @@ module.exports = {
   postPersonLogin,
   putIotSwitch,
   subscribe,
-}
+};
