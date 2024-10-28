@@ -13,7 +13,7 @@
     "sockjs-client": "^1.6.0"
   },
   "engines": {
-    "node": ">=14.0.0",
-    "homebridge": ">=1.0.0"
+    "node": ">=14.17.0"
+    "homebridge": ">=2.0.0",
   }
 }
