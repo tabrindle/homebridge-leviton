@@ -6,7 +6,7 @@
     "type": "object",
     "properties": {
       "email": {
-        "title": "email",
+        "title": "Email",
         "type": "string",
         "required": true,
         "x-schema-form": {
@@ -14,13 +14,21 @@
         }
       },
       "password": {
-        "title": "password",
+        "title": "Password",
         "type": "string",
         "required": true,
         "x-schema-form": {
           "type": "password"
         }
+      },
+      "loglevel": {
+        "title": "Log Level",
+        "type": "string",
+        "enum": ["debug", "info", "warn", "error"],
+        "default": "info",
+        "description": "Sets the logging level for debugging purposes."
       }
-    }
+    },
+    "required": ["email", "password"]
   }
 }
