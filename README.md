@@ -28,7 +28,9 @@ _You must use the main "My Leviton" login credentials._
     "platform": "LevitonDecoraSmart",
     "email": "your@email.com",
     "password": "supersecretpassword"
-    "loglevel"" "info" // this is optional, info is default. debug for more, warn or error for less
+    "loglevel": "info" // optional, info is default. debug for more, warn or error for less
+    "excludedModels": ["DWP15"] // optional, use this to exclude entire models like fully HomeKit compatible devices
+    "excludedSerials": ["1000_0023_CCE2"] //optional, use this to exclude just one device
   }
 ]
 ```
