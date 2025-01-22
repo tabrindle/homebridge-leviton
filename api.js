@@ -13,7 +13,7 @@ function getResidenceIotSwitches({ residenceID, token }) {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
+      Authorization: token,
     },
   }).then((res) => res.json())
 }
@@ -24,7 +24,7 @@ function getIotSwitch({ switchID, token }) {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
+      Authorization: token,
     },
   }).then((res) => res.json())
 }
@@ -40,7 +40,7 @@ function putIotSwitch({ switchID, power, brightness, token }) {
     body: JSON.stringify(body),
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
+      Authorization: token,
     },
   }).then((res) => res.json())
 }
@@ -51,7 +51,7 @@ function getPersonResidentialPermissions({ personID, token }) {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
+      Authorization: token,
     },
   }).then((res) => res.json())
 }
@@ -62,7 +62,7 @@ function getResidentialAccounts({ accountID, token }) {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
+      Authorization: token,
     },
   }).then((res) => res.json())
 }
@@ -72,12 +72,12 @@ function getResidentialAccountsV2({ residenceObjectID, token }) {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-Access-Token': token,
+      Authorization: token,
     },
   }).then((res) => res.json())
 }
 
-// obtain a user token to use in X-Access-Token header on all requests
+// obtain a user token to use in Authorization header on all requests
 function postPersonLogin({ email, password }) {
   const query = toQueryString({
     include: 'user',
@@ -86,9 +86,7 @@ function postPersonLogin({ email, password }) {
     method: 'POST',
     body: JSON.stringify({
       email,
-      loggedInVia: 'myLeviton',
       password,
-      rememberMe: true,
     }),
     headers: {
       'Content-Type': 'application/json; charset=utf-8',

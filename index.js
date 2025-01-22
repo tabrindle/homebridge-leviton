@@ -36,10 +36,14 @@ class LevitonDecoraSmartPlatform {
     api.on('didFinishLaunching', async () => {
       this.log.debug('didFinishLaunching')
       const { devices, token } = await this.initialize(config)
+      const excludedModels = (config.excludeModels || []).map((name) => name.toUpperCase())
+      const excludedSerials = (config.excludeSerials || []).map((name) => name.toUpperCase())
       if (Array.isArray(devices) && devices.length > 0) {
         devices.forEach((device) => {
           if (!this.accessories.find((acc) => acc.context.device.serial === device.serial)) {
-            this.addAccessory(device, token)
+            if (!excludedModels.includes(device.model) && !excludedSerials.includes(device.serial)) {
+              this.addAccessory(device, token)
+            }
           }
         })
       } else {

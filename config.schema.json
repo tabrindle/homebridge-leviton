@@ -20,6 +20,20 @@
         "x-schema-form": {
           "type": "password"
         }
+      },
+      "excludedModels": {
+        "type": "array",
+        "description": "List of models to be excluded",
+        "items": {
+          "type": "string"
+        }
+      },
+      "excludedSerials": {
+        "type": "array",
+        "description": "List of models to be excluded",
+        "items": {
+          "type": "string"
+        }
       }
     }
   }
