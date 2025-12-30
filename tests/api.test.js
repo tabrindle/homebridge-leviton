@@ -496,23 +496,30 @@ describe('Leviton API', () => {
 
     it('should handle reconnection error gracefully', () => {
       const login = { id: 'token', userId: 'user-1' }
+      let callCount = 0
+      
+      // Setup SockJS to throw on second call (reconnection attempt)
+      SockJS.mockImplementation(() => {
+        callCount++
+        if (callCount === 2) {
+          throw new Error('Connection failed')
+        }
+        return mockWs
+      })
+      
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
-      // Close with error
+      // Close with error to trigger reconnection
       mockWs.onclose({ code: 1006, wasClean: false })
 
-      // Fast-forward past delay
+      // Fast-forward past delay to trigger reconnection attempt
       jest.advanceTimersByTime(1001)
 
-      // Mock SockJS to throw error on second call
-      SockJS.mockImplementationOnce(() => {
-        throw new Error('Connection failed')
-      })
-
-      // Fast-forward again to trigger reconnection
-      jest.advanceTimersByTime(1001)
-
-      expect(mockScope.log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to reconnect'))
+      // Should have logged the reconnection error
+      const errorCalls = mockScope.log.error.mock.calls.filter(call =>
+        call[0] && typeof call[0] === 'string' && call[0].includes('Failed to reconnect')
+      )
+      expect(errorCalls.length).toBeGreaterThan(0)
     })
 
     it('should handle error without message property', () => {
