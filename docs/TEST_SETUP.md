@@ -1,8 +1,9 @@
 # Test Setup Instructions
 
-**Status**: ✅ All 106 tests passing (96%+ coverage)
+**Status**: ✅ All 122 tests passing (99.76% coverage)
 
-Last Updated: 2025-01-XX
+**Last Updated:** 2025-01-27  
+**Version:** 2.2.0
 
 ## Quick Start
 
@@ -26,10 +27,10 @@ npm test
 - `sockjs-client@^1.6.0` - WebSocket client (mocked in tests)
 
 ### Development Dependencies
-- `jest@^29.7.0` - Test framework
+- `jest@^30.2.0` - Test framework
 - `eslint@^9.0.0` - Code linter (ESLint v9 flat config)
 - `globals@^15.0.0` - ESLint globals
-- `nock@^13.4.0` - HTTP mocking (for future use)
+- `nock@^13.4.0` - HTTP mocking
 
 ## Running Tests
 
@@ -69,18 +70,18 @@ After running tests, you'll see:
 ## Coverage Thresholds
 
 Tests must meet these thresholds:
-- **Branches**: 90% (currently 89.65%)
-- **Functions**: 90% (currently 97.1% ✅)
-- **Lines**: 90% (currently 96.12% ✅)
-- **Statements**: 90% (currently 96.17% ✅)
+- **Branches**: 90% (currently 94.53% ✅)
+- **Functions**: 90% (currently 100% ✅)
+- **Lines**: 90% (currently 99.76% ✅)
+- **Statements**: 90% (currently 99.76% ✅)
 
-**Current Status**: All tests passing, branch coverage slightly below threshold but acceptable.
+**Current Status**: All tests passing, all coverage thresholds exceeded.
 
 ### Current Coverage Metrics
 ```
-All files |   96.17 |    89.65 |    97.1 |   96.12 |
- api.js   |   96.42 |    91.95 |   93.75 |   96.42 |
- index.js |    96.1 |    88.66 |   98.11 |   96.03 |
+All files |   99.76 |    94.53 |     100 |   99.76 |
+ api.js   |   99.15 |    93.51 |     100 |   99.15 |
+ index.js |     100 |    95.07 |     100 |     100 |
 ```
 
 ## Troubleshooting

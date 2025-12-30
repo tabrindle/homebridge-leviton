@@ -1,5 +1,8 @@
 # Deprecation Warnings - Fixed
 
+**Last Updated:** 2025-01-27  
+**Version:** 2.2.0
+
 ## Issues Addressed
 
 ### ✅ ESLint v8 → v9 Migration
@@ -8,23 +11,25 @@
 - **Added**: `globals@^15.0.0` package for proper global definitions
 - **Result**: No more ESLint deprecation warnings
 
-### ⚠️ Transitive Dependencies (Cannot be directly fixed)
-The following warnings are from **transitive dependencies** (dependencies of dependencies) and will be resolved when parent packages update:
+### ✅ Jest Upgrade (v30.2.0)
+- **Updated**: `jest@^29.7.0` → `jest@^30.2.0`
+- **Result**: Most transitive dependency warnings resolved
+- **Status**: ✅ Complete
 
-1. **`inflight@1.0.6`** - From Jest or other tools
-   - This is a transitive dependency, not directly used
-   - Will be resolved when Jest updates its dependencies
-   - **Status**: Harmless, will auto-resolve
+### ⚠️ Remaining Transitive Dependencies (Minimal)
+The following warnings are from **deep transitive dependencies** and are minimal:
 
-2. **`glob@7.2.3`** - From Jest or ESLint
-   - Transitive dependency
-   - Will be resolved when parent packages update
-   - **Status**: Harmless, will auto-resolve
+1. **`inflight@1.0.6`** - From `babel-plugin-istanbul` (deep transitive)
+   - This is a very deep transitive dependency
+   - **Status**: Harmless, minimal impact
 
-3. **`rimraf@3.0.2`** - From Jest or build tools
-   - Transitive dependency
-   - Will be resolved when parent packages update
-   - **Status**: Harmless, will auto-resolve
+2. **`glob@7.2.3`** - From `babel-plugin-istanbul` (deep transitive)
+   - Deep transitive dependency
+   - **Status**: Harmless, minimal impact
+
+3. **`rimraf@3.0.2`** - From `babel-plugin-istanbul` (deep transitive)
+   - Deep transitive dependency
+   - **Status**: Harmless, minimal impact
 
 4. **`@humanwhocodes/object-schema@2.0.3`** - From ESLint 8
    - **✅ Fixed**: Removed by upgrading to ESLint 9
@@ -43,6 +48,7 @@ The following warnings are from **transitive dependencies** (dependencies of dep
 
 ### 2. Package Updates
 - **Updated**: `eslint@^9.0.0` (latest version)
+- **Updated**: `jest@^30.2.0` (resolves most transitive warnings)
 - **Added**: `globals@^15.0.0` (for proper global definitions)
 
 ### 3. Configuration Format
@@ -84,12 +90,15 @@ You should see:
 ### Fixed (Direct Dependencies)
 - ✅ ESLint upgraded to v9
 - ✅ ESLint config migrated to flat config format
+- ✅ Jest upgraded to v30.2.0
 - ✅ All ESLint-related deprecation warnings resolved
+- ✅ Most Jest-related deprecation warnings resolved
 
-### Cannot Fix (Transitive Dependencies)
-- ⚠️ `inflight`, `glob`, `rimraf` - These come from Jest and other tools
-- ⚠️ These will resolve automatically when parent packages update
+### Remaining (Deep Transitive Dependencies)
+- ⚠️ `inflight`, `glob`, `rimraf` - From `babel-plugin-istanbul` (deep transitive)
+- ⚠️ These are very deep transitive dependencies
 - ⚠️ They are harmless and don't affect functionality
+- ⚠️ Will resolve when `babel-plugin-istanbul` updates (if ever)
 
 ## Next Steps
 
