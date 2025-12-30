@@ -271,7 +271,7 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 - Significantly improves performance for HomeKit queries
 
 **Code Locations:**
-- `api.js`: Lines 97-165 (ResponseCache class), Lines 167-200 (apiRequest with caching), Lines 202-220 (getIotSwitch with cache), Lines 222-260 (putIotSwitch with cache invalidation)
+- `api.js`: Lines 76-137 (ResponseCache class), Lines 176-218 (apiRequest with caching), Lines 248-269 (getIotSwitch with cache), Lines 280-320 (putIotSwitch with cache invalidation)
 
 **Configuration:**
 - `CACHE_TTL_MS`: 2000ms (2 seconds)
