@@ -3,6 +3,7 @@
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![npm version](https://badgen.net/npm/v/homebridge-leviton)](https://www.npmjs.com/package/homebridge-leviton)
 [![npm downloads](https://badgen.net/npm/dt/homebridge-leviton)](https://www.npmjs.com/package/homebridge-leviton)
+[![Tests](https://github.com/tbaur/homebridge-leviton/actions/workflows/test.yml/badge.svg)](https://github.com/tbaur/homebridge-leviton/actions/workflows/test.yml)
 
 Homebridge plugin for Leviton Decora Smart WiFi devices. This plugin allows you to control your Leviton smart switches, dimmers, outlets, and fan controllers through Apple HomeKit via Homebridge.
 
