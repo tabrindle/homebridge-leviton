@@ -57,9 +57,11 @@ async function apiRequest(url, options = {}) {
 
     return await response.json()
   } catch (error) {
-    if (error.message.includes('API request failed')) {
+    // Re-throw API errors as-is
+    if (error.message && error.message.includes('API request failed')) {
       throw error
     }
+    // Wrap network errors with more context
     throw new Error(`Network error: ${error.message}`)
   }
 }
@@ -234,18 +236,29 @@ function postPersonLogin({ email, password }) {
   })
 }
 
+// WebSocket reconnection configuration
+const WS_RECONNECT_MAX_ATTEMPTS = 10
+const WS_RECONNECT_INITIAL_DELAY = 1000 // 1 second
+const WS_RECONNECT_MAX_DELAY = 60000 // 60 seconds
+const WS_CONNECTION_TIMEOUT = 10000 // 10 seconds
+
 /**
- * Subscribes to real-time updates for IoT switches via WebSocket
+ * Creates a WebSocket connection with reconnection logic
  * @param {Object} login - Login response object containing token
  * @param {Array} devices - Array of device objects to subscribe to
  * @param {Function} callback - Callback function for device updates
  * @param {Object} scope - Scope object (platform instance) for logging
+ * @param {number} reconnectAttempt - Current reconnection attempt number
  * @returns {SockJS} WebSocket connection instance
  */
-function subscribe(login, devices, callback, scope) {
-  if (!login || !devices || !Array.isArray(devices) || !callback || !scope) {
-    throw new Error('login, devices array, callback, and scope are required')
+function createWebSocketConnection(login, devices, callback, scope, reconnectAttempt = 0) {
+  // Validate login object has required id property
+  if (!login || !login.id) {
+    throw new Error('login object with id property is required')
   }
+
+  const token = login.id
+  let reconnectTimeout
 
   const ws = new SockJS(SOCKET_URL, {
     origin: 'https://my.leviton.com',
@@ -263,16 +276,63 @@ function subscribe(login, devices, callback, scope) {
     },
   })
 
+  // Connection timeout - close if not opened within timeout period
+  let isOpen = false
+  const connectionTimeout = setTimeout(() => {
+    if (!isOpen) {
+      scope.log.error('WebSocket connection timeout')
+      try {
+        ws.close()
+      } catch {
+        // Ignore errors when closing
+      }
+    }
+  }, WS_CONNECTION_TIMEOUT)
+
   ws.onclose = function onclose(ev) {
+    clearTimeout(connectionTimeout)
+    clearTimeout(reconnectTimeout)
+
+    const wasClean = ev && ev.wasClean
+    const code = ev && ev.code
+
+    if (wasClean && code === 1000) {
+      // Normal closure - don't reconnect
+      scope.log.debug('WebSocket connection closed normally')
+      return
+    }
+
     scope.log.error(`Socket connection closed: ${JSON.stringify(ev)}`)
-    // Note: Reconnection logic could be added here in the future
+
+    // Attempt reconnection with exponential backoff
+    if (reconnectAttempt < WS_RECONNECT_MAX_ATTEMPTS) {
+      const delay = Math.min(
+        WS_RECONNECT_INITIAL_DELAY * Math.pow(2, reconnectAttempt),
+        WS_RECONNECT_MAX_DELAY
+      )
+
+      scope.log.info(`Attempting to reconnect WebSocket in ${delay}ms (attempt ${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
+
+      reconnectTimeout = setTimeout(() => {
+        try {
+          createWebSocketConnection(login, devices, callback, scope, reconnectAttempt + 1)
+        } catch (error) {
+          scope.log.error(`Failed to reconnect WebSocket: ${error.message}`)
+        }
+      }, delay)
+    } else {
+      scope.log.error(`WebSocket reconnection failed after ${WS_RECONNECT_MAX_ATTEMPTS} attempts`)
+    }
   }
 
   ws.onopen = function onopen() {
+    clearTimeout(connectionTimeout)
+    isOpen = true
     scope.log.debug('Socket connection opened')
   }
 
   ws.onerror = function onerror(error) {
+    clearTimeout(connectionTimeout)
     scope.log.error(`Socket error: ${error.message || 'Unknown error'}`)
   }
 
@@ -281,7 +341,7 @@ function subscribe(login, devices, callback, scope) {
     try {
       data = JSON.parse(message.data)
     } catch {
-      // Ignore parse errors - log and return
+      // Log parse errors for debugging
       scope.log.error(`Received bad JSON: ${String(message.data)}`)
       return
     }
@@ -292,7 +352,8 @@ function subscribe(login, devices, callback, scope) {
 
     // Handle challenge message
     if (data.type === WS_MESSAGE_TYPES.CHALLENGE) {
-      const response = [JSON.stringify({ token: login })]
+      // Send token string, not the full login object
+      const response = [JSON.stringify({ token })]
       ws.send(response)
       return
     }
@@ -336,6 +397,26 @@ function subscribe(login, devices, callback, scope) {
   }
 
   return ws
+}
+
+/**
+ * Subscribes to real-time updates for IoT switches via WebSocket
+ * @param {Object} login - Login response object containing token
+ * @param {Array} devices - Array of device objects to subscribe to
+ * @param {Function} callback - Callback function for device updates
+ * @param {Object} scope - Scope object (platform instance) for logging
+ * @returns {SockJS} WebSocket connection instance
+ */
+function subscribe(login, devices, callback, scope) {
+  if (!login || !devices || !Array.isArray(devices) || !callback || !scope) {
+    throw new Error('login, devices array, callback, and scope are required')
+  }
+
+  if (!login.id) {
+    throw new Error('login object must have an id property (token)')
+  }
+
+  return createWebSocketConnection(login, devices, callback, scope, 0)
 }
 
 module.exports = {

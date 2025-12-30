@@ -278,12 +278,14 @@ describe('Leviton API', () => {
     let mockScope
 
     beforeEach(() => {
+      jest.useFakeTimers()
       mockWs = {
         onclose: null,
         onopen: null,
         onerror: null,
         onmessage: null,
         send: jest.fn(),
+        close: jest.fn(),
       }
 
       SockJS.mockImplementation(() => mockWs)
@@ -293,8 +295,13 @@ describe('Leviton API', () => {
         log: {
           debug: jest.fn(),
           error: jest.fn(),
+          info: jest.fn(),
         },
       }
+    })
+
+    afterEach(() => {
+      jest.useRealTimers()
     })
 
     it('should create WebSocket connection', () => {
@@ -314,6 +321,10 @@ describe('Leviton API', () => {
       mockWs.onmessage(challengeMessage)
 
       expect(mockWs.send).toHaveBeenCalled()
+      // Verify token string is sent, not full login object
+      const sendCall = mockWs.send.mock.calls[0][0]
+      const sentData = JSON.parse(sendCall[0])
+      expect(sentData.token).toBe('token')
     })
 
     it('should handle ready status and subscribe to devices', () => {
@@ -391,6 +402,126 @@ describe('Leviton API', () => {
       mockWs.onmessage(invalidMessage)
 
       expect(mockScope.log.error).toHaveBeenCalled()
+    })
+
+    it('should handle WebSocket connection timeout', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      // Fast-forward past timeout
+      jest.advanceTimersByTime(10001)
+
+      expect(mockScope.log.error).toHaveBeenCalledWith(expect.stringContaining('timeout'))
+      expect(mockWs.close).toHaveBeenCalled()
+    })
+
+    it('should handle WebSocket reconnection on close', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      // Close with error code
+      mockWs.onclose({ code: 1006, wasClean: false })
+
+      // Fast-forward past initial delay
+      jest.advanceTimersByTime(1001)
+
+      // Should attempt reconnection
+      expect(mockScope.log.info).toHaveBeenCalledWith(expect.stringContaining('reconnect'))
+      expect(SockJS).toHaveBeenCalledTimes(2)
+    })
+
+    it('should stop reconnecting after max attempts', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      // Close 10 times to exceed max attempts
+      for (let i = 0; i < 11; i++) {
+        mockWs.onclose({ code: 1006, wasClean: false })
+        // Fast-forward past delay (exponential backoff)
+        const delay = Math.min(1000 * Math.pow(2, i), 60000)
+        jest.advanceTimersByTime(delay + 100)
+      }
+
+      expect(mockScope.log.error).toHaveBeenCalledWith(expect.stringContaining('reconnection failed'))
+    })
+
+    it('should handle network error in apiRequest', async () => {
+      const networkError = new Error('Network request failed')
+      fetch.mockRejectedValueOnce(networkError)
+
+      await expect(
+        Leviton.getIotSwitch({ switchID: 'switch-1', token: 'token-1' })
+      ).rejects.toThrow('Network error')
+    })
+
+    it('should handle non-object data in WebSocket message', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      const invalidMessage = {
+        data: JSON.stringify('not an object'),
+      }
+
+      mockWs.onmessage(invalidMessage)
+
+      // Should not call callback for invalid data
+      expect(mockCallback).not.toHaveBeenCalled()
+    })
+
+    it('should require login.id property', () => {
+      expect(() => {
+        Leviton.subscribe({ userId: 'user-1' }, [{ id: 'device-1' }], mockCallback, mockScope)
+      }).toThrow('login object must have an id property')
+    })
+
+    it('should handle WebSocket open event', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      mockWs.onopen()
+
+      expect(mockScope.log.debug).toHaveBeenCalledWith('Socket connection opened')
+    })
+
+    it('should not reconnect on normal WebSocket close', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      mockWs.onclose({ code: 1000, wasClean: true })
+
+      // Should log debug, not error, and not attempt reconnection
+      expect(mockScope.log.debug).toHaveBeenCalledWith('WebSocket connection closed normally')
+      expect(mockScope.log.info).not.toHaveBeenCalled()
+    })
+
+    it('should handle reconnection error gracefully', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      // Close with error
+      mockWs.onclose({ code: 1006, wasClean: false })
+
+      // Fast-forward past delay
+      jest.advanceTimersByTime(1001)
+
+      // Mock SockJS to throw error on second call
+      SockJS.mockImplementationOnce(() => {
+        throw new Error('Connection failed')
+      })
+
+      // Fast-forward again to trigger reconnection
+      jest.advanceTimersByTime(1001)
+
+      expect(mockScope.log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to reconnect'))
+    })
+
+    it('should handle error without message property', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      mockWs.onerror({})
+
+      expect(mockScope.log.error).toHaveBeenCalledWith('Socket error: Unknown error')
     })
   })
 })
