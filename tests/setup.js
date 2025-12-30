@@ -89,7 +89,7 @@ global.createMockApi = () => ({
   platformAccessory: jest.fn(),
   registerPlatformAccessories: jest.fn(),
   unregisterPlatformAccessories: jest.fn(),
-  on: jest.fn((event, callback) => {
+  on: jest.fn((event, _callback) => {
     if (event === 'didFinishLaunching') {
       // Don't auto-trigger in sandbox - tests control this
     }

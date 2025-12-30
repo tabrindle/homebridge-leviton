@@ -33,11 +33,11 @@ const mockCharacteristic = {
   FirmwareRevision: 'FirmwareRevision',
 }
 
-let Service, Characteristic, Accessory, UUID
+let _Service, _Characteristic, _Accessory, UUID
 let mockHomebridge
 let mockLog
 let mockApi
-let mockAccessory
+let _mockAccessory
 let mockServiceInstance
 let LevitonDecoraSmartPlatform
 
@@ -116,7 +116,7 @@ describe('LevitonDecoraSmartPlatform', () => {
     
     // CRITICAL FIX: jest.fn() breaks 'new' behavior, so we create a real constructor
     // and attach Jest mock properties manually
-    function PlatformAccessoryConstructor(name, uuid) {
+    function PlatformAccessoryConstructor(name, _uuid) {
       // Track services that have been added (closure - each call gets its own)
       const services = {}
       
@@ -201,13 +201,13 @@ describe('LevitonDecoraSmartPlatform', () => {
     
     // Attach Jest-compatible mock object
     platformAccessoryMock.mock = callTracker
-    platformAccessoryMock.mockImplementation = function(fn) {
+    platformAccessoryMock.mockImplementation = function(_fn) {
       // Not used, but needed for Jest compatibility
     }
-    platformAccessoryMock.mockReturnValue = function(value) {
+    platformAccessoryMock.mockReturnValue = function(_value) {
       // Not used, but needed for Jest compatibility
     }
-    platformAccessoryMock.mockResolvedValue = function(value) {
+    platformAccessoryMock.mockResolvedValue = function(_value) {
       // Not used, but needed for Jest compatibility
     }
     
@@ -273,25 +273,25 @@ describe('LevitonDecoraSmartPlatform', () => {
     })
 
     it('should reject null config', () => {
-      const platform = new LevitonDecoraSmartPlatform(mockLog, null, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, null, mockApi)
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('No config'))
     })
 
     it('should reject missing email', () => {
       const config = { password: 'password123' }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('email and password'))
     })
 
     it('should reject missing password', () => {
       const config = { email: 'test@example.com' }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('email and password'))
     })
 
     it('should reject non-string email', () => {
       const config = { email: 123, password: 'test' }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('must be strings'))
     })
 
@@ -1308,7 +1308,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 400))
       // Should log error about no devices
       expect(mockLog).toHaveBeenCalled()
@@ -1320,7 +1320,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 300))
       expect(mockLog).toHaveBeenCalled()
     })
@@ -1331,7 +1331,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 300))
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to get Leviton devices'))
     })
@@ -1472,7 +1472,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 400))
       // Should log error about subscription
       // The error is logged via platform.log.error, which calls mockLog

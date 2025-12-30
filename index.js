@@ -3,7 +3,7 @@
  * @module homebridge-leviton
  */
 
-let Service, Characteristic, Accessory, UUID
+let Service, Characteristic, _Accessory, UUID
 const Leviton = require('./api.js')
 
 // Plugin constants
@@ -86,7 +86,6 @@ class LevitonDecoraSmartPlatform {
    * @returns {Object} Logger object with level methods
    */
   _setupLogging(log, config) {
-    const noop = () => {}
     const logLevel = (config && LOG_LEVELS.includes(config.loglevel) && config.loglevel) || DEFAULT_LOG_LEVEL
     const minLevelIndex = LOG_LEVELS.indexOf(logLevel)
 
@@ -865,7 +864,7 @@ class LevitonDecoraSmartPlatform {
 module.exports = function (homebridge) {
   Service = homebridge.hap.Service
   Characteristic = homebridge.hap.Characteristic
-  Accessory = homebridge.hap.Accessory
+  _Accessory = homebridge.hap.Accessory
   UUID = homebridge.hap.uuid
   homebridge.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, LevitonDecoraSmartPlatform, true)
 }
