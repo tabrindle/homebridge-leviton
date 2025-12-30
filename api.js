@@ -20,6 +20,9 @@ const RATE_LIMIT_WINDOW_MS = 60000 // 1 minute window
 // API response cache configuration
 const CACHE_TTL_MS = 2000 // 2 seconds cache TTL
 
+// API request timeout configuration
+const API_REQUEST_TIMEOUT_MS = 10000 // 10 seconds timeout for API requests
+
 /**
  * Simple token bucket rate limiter
  * @class RateLimiter
@@ -187,14 +190,23 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
   // Rate limiting: wait if needed
   await rateLimiter.waitIfNeeded()
 
+  // Create AbortController for timeout
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => {
+    controller.abort()
+  }, API_REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
         ...DEFAULT_HEADERS,
         ...options.headers,
       },
     })
+
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`)
@@ -209,6 +221,13 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
 
     return data
   } catch (error) {
+    clearTimeout(timeoutId)
+
+    // Handle timeout/abort errors
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      throw new Error(`API request timeout after ${API_REQUEST_TIMEOUT_MS}ms`)
+    }
+
     // Re-throw API errors as-is
     if (error.message && error.message.includes('API request failed')) {
       throw error

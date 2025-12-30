@@ -113,14 +113,19 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 **Status:** ✅ Implemented  
 **Details:**
 - WebSocket connection timeout: 10 seconds
+- API request timeout: 10 seconds (explicit timeout using AbortController)
 - WebSocket reconnection with exponential backoff
 - Max reconnection attempts: 10
 - Timeouts properly cleared on cleanup
+- Prevents "didn't respond at all" errors by ensuring callbacks are always called
 
 **Code Locations:**
-- `api.js`: Lines 277-288, 292-294, 329
+- `api.js`: Lines 187-230 (API request timeout), Lines 455-470 (WebSocket timeout)
 
-**Note:** API calls use `node-fetch` which has default timeout behavior. Consider adding explicit timeouts in future version.
+**Implementation:**
+- Uses AbortController for API request timeouts
+- Timeout errors are caught and converted to user-friendly messages
+- Addresses GitHub issue #41: Better handling for my.leviton API slowness
 
 ### ✅ REL-003: Resource Cleanup
 **Status:** ✅ Proper Cleanup  

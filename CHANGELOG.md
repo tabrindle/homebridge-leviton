@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cache automatically invalidated after device updates
   - Significant performance improvement for HomeKit queries
 
+- **API Request Timeout (Issue #41)**:
+  - Added explicit 10-second timeout for all API requests using AbortController
+  - Prevents "didn't respond at all" errors when API is slow
+  - Ensures callbacks are always called, even on timeout
+  - Improves handling of my.leviton API slowness
+  - Reduces log volume during API issues
+
 - **Testing**:
   - Comprehensive test suite with 122 tests
   - 99.76% code coverage (99.15% for api.js, 100% for index.js)
