@@ -243,7 +243,7 @@ npm run lint:fix
 ## Requirements
 
 - **Homebridge**: v1.6.0 or higher (v2.0-beta supported)
-- **Node.js**: v18.20.4+, v20.15.1+, or v22+
+- **Node.js**: v20.15.1+, v22+, or v24+ (LTS)
 - **My Leviton Account**: Active account with devices
 
 ## Compatibility
