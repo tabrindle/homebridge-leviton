@@ -1,0 +1,6 @@
+# Test configuration reminder
+# Tests should always run in sandboxed environment
+# Set NODE_ENV=test to prevent any real operations
+
+NODE_ENV=test
+

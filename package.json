@@ -1,10 +1,14 @@
 {
   "name": "homebridge-leviton",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "A homebridge plugin for Leviton Decora Smart devices",
   "main": "index.js",
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "leviton",
+    "decora",
+    "smart",
+    "homekit"
   ],
   "author": "tabrindle@gmail.com",
   "license": "MIT",
@@ -12,9 +16,22 @@
     "node-fetch": "^2.6.7",
     "sockjs-client": "^1.6.0"
   },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "jest": "^29.7.0",
+    "nock": "^13.4.0"
+  },
   "engines": {
-    "node": ">=14.0.0",
-    "homebridge": ">=1.0.0"
+    "homebridge": "^1.6.0 || ^2.0.0-beta.0",
+    "node": "^18.20.4 || ^20.15.1 || ^22"
+  },
+  "scripts": {
+    "test": "NODE_ENV=test jest --coverage",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "test:sandbox": "NODE_ENV=test jest --coverage --config=jest.config.js",
+    "lint": "eslint *.js tests/*.js",
+    "lint:fix": "eslint --fix *.js tests/*.js"
   },
   "funding": [
     {

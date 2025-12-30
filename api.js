@@ -1,104 +1,255 @@
+/**
+ * @fileoverview Leviton API client for interacting with My Leviton cloud services
+ * @module api
+ */
+
 const fetch = require('node-fetch')
 const SockJS = require('sockjs-client')
 
-const baseURL = 'https://my.leviton.com/api'
-const toQueryString = (params) =>
-  Object.keys(params)
-    .map((key) => `${key}=${params[key]}`)
+// API Configuration
+const BASE_URL = 'https://my.leviton.com/api'
+const SOCKET_URL = 'https://my.leviton.com/socket'
+const DEFAULT_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+}
+
+// WebSocket message types
+const WS_MESSAGE_TYPES = {
+  CHALLENGE: 'challenge',
+  STATUS: 'status',
+  NOTIFICATION: 'notification',
+}
+
+// WebSocket status values
+const WS_STATUS_READY = 'ready'
+
+/**
+ * Converts an object to a URL query string
+ * @param {Object} params - Parameters to convert
+ * @returns {string} Query string
+ */
+function toQueryString(params) {
+  return Object.keys(params)
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
     .join('&')
+}
 
-// returns a list of switches, given a residenceID
+/**
+ * Makes an API request with error handling
+ * @param {string} url - API endpoint URL
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Object>} JSON response
+ * @throws {Error} If request fails or response is not OK
+ */
+async function apiRequest(url, options = {}) {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...DEFAULT_HEADERS,
+        ...options.headers,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    if (error.message.includes('API request failed')) {
+      throw error
+    }
+    throw new Error(`Network error: ${error.message}`)
+  }
+}
+
+/**
+ * Returns a list of IoT switches for a given residence
+ * @param {Object} params - Parameters
+ * @param {string} params.residenceID - Residence ID
+ * @param {string} params.token - Authentication token
+ * @returns {Promise<Array>} Array of IoT switch devices
+ */
 function getResidenceIotSwitches({ residenceID, token }) {
-  return fetch(`${baseURL}/Residences/${residenceID}/iotSwitches`, {
+  if (!residenceID || !token) {
+    return Promise.reject(new Error('residenceID and token are required'))
+  }
+
+  return apiRequest(`${BASE_URL}/Residences/${residenceID}/iotSwitches`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
       Authorization: token,
     },
-  }).then((res) => res.json())
+  })
 }
 
-// gets state of a given switchID
+/**
+ * Gets the current state of a specific IoT switch
+ * @param {Object} params - Parameters
+ * @param {string} params.switchID - Switch device ID
+ * @param {string} params.token - Authentication token
+ * @returns {Promise<Object>} Switch state object
+ */
 function getIotSwitch({ switchID, token }) {
-  return fetch(`${baseURL}/IotSwitches/${switchID}`, {
+  if (!switchID || !token) {
+    return Promise.reject(new Error('switchID and token are required'))
+  }
+
+  return apiRequest(`${BASE_URL}/IotSwitches/${switchID}`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
       Authorization: token,
     },
-  }).then((res) => res.json())
+  })
 }
 
-// updates the state of a given switch, especially power and brightness
-// power is an integer 1-100, power is a string, 'ON' or 'OFF'
+/**
+ * Updates the state of an IoT switch (power and/or brightness)
+ * @param {Object} params - Parameters
+ * @param {string} params.switchID - Switch device ID
+ * @param {string} [params.power] - Power state ('ON' or 'OFF')
+ * @param {number} [params.brightness] - Brightness level (0-100)
+ * @param {string} params.token - Authentication token
+ * @returns {Promise<Object>} Updated switch state
+ */
 function putIotSwitch({ switchID, power, brightness, token }) {
+  if (!switchID || !token) {
+    return Promise.reject(new Error('switchID and token are required'))
+  }
+
   const body = {}
-  if (brightness) body.brightness = brightness
-  if (power) body.power = power
-  return fetch(`${baseURL}/IotSwitches/${switchID}`, {
+  if (brightness !== undefined && brightness !== null) {
+    if (typeof brightness !== 'number' || brightness < 0 || brightness > 100) {
+      return Promise.reject(new Error('brightness must be a number between 0 and 100'))
+    }
+    body.brightness = brightness
+  }
+  if (power !== undefined && power !== null) {
+    if (power !== 'ON' && power !== 'OFF') {
+      return Promise.reject(new Error("power must be 'ON' or 'OFF'"))
+    }
+    body.power = power
+  }
+
+  if (Object.keys(body).length === 0) {
+    return Promise.reject(new Error('At least one of power or brightness must be provided'))
+  }
+
+  return apiRequest(`${BASE_URL}/IotSwitches/${switchID}`, {
     method: 'PUT',
     body: JSON.stringify(body),
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
       Authorization: token,
     },
-  }).then((res) => res.json())
+  })
 }
 
-// uses a personID/userId to get accountID
+/**
+ * Gets residential permissions for a person
+ * @param {Object} params - Parameters
+ * @param {string} params.personID - Person/user ID
+ * @param {string} params.token - Authentication token
+ * @returns {Promise<Array>} Array of residential permissions
+ */
 function getPersonResidentialPermissions({ personID, token }) {
-  return fetch(`${baseURL}/Person/${personID}/residentialPermissions`, {
+  if (!personID || !token) {
+    return Promise.reject(new Error('personID and token are required'))
+  }
+
+  return apiRequest(`${BASE_URL}/Person/${personID}/residentialPermissions`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
       Authorization: token,
     },
-  }).then((res) => res.json())
+  })
 }
 
-// use accountID to get residenceIDs
+/**
+ * Gets residential accounts for an account ID
+ * @param {Object} params - Parameters
+ * @param {string} params.accountID - Account ID
+ * @param {string} params.token - Authentication token
+ * @returns {Promise<Object>} Residential account information
+ */
 function getResidentialAccounts({ accountID, token }) {
-  return fetch(`${baseURL}/ResidentialAccounts/${accountID}`, {
+  if (!accountID || !token) {
+    return Promise.reject(new Error('accountID and token are required'))
+  }
+
+  return apiRequest(`${BASE_URL}/ResidentialAccounts/${accountID}`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
       Authorization: token,
     },
-  }).then((res) => res.json())
+  })
 }
 
+/**
+ * Gets residential accounts using v2 API
+ * @param {Object} params - Parameters
+ * @param {string} params.residenceObjectID - Residence object ID
+ * @param {string} params.token - Authentication token
+ * @returns {Promise<Array>} Array of residence objects
+ */
 function getResidentialAccountsV2({ residenceObjectID, token }) {
-  return fetch(`${baseURL}/ResidentialAccounts/${residenceObjectID}/residences`, {
+  if (!residenceObjectID || !token) {
+    return Promise.reject(new Error('residenceObjectID and token are required'))
+  }
+
+  return apiRequest(`${BASE_URL}/ResidentialAccounts/${residenceObjectID}/residences`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
       Authorization: token,
     },
-  }).then((res) => res.json())
+  })
 }
 
-// obtain a user token to use in Authorization header on all requests
+/**
+ * Authenticates a user and obtains an authentication token
+ * @param {Object} params - Parameters
+ * @param {string} params.email - User email address
+ * @param {string} params.password - User password
+ * @returns {Promise<Object>} Login response with token and user ID
+ */
 function postPersonLogin({ email, password }) {
+  if (!email || !password) {
+    return Promise.reject(new Error('email and password are required'))
+  }
+
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return Promise.reject(new Error('email and password must be strings'))
+  }
+
   const query = toQueryString({
     include: 'user',
   })
-  return fetch(`${baseURL}/Person/login?${query}`, {
+
+  return apiRequest(`${BASE_URL}/Person/login?${query}`, {
     method: 'POST',
     body: JSON.stringify({
       email,
       password,
     }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  }).then((res) => res.json())
+  })
 }
 
+/**
+ * Subscribes to real-time updates for IoT switches via WebSocket
+ * @param {Object} login - Login response object containing token
+ * @param {Array} devices - Array of device objects to subscribe to
+ * @param {Function} callback - Callback function for device updates
+ * @param {Object} scope - Scope object (platform instance) for logging
+ * @returns {SockJS} WebSocket connection instance
+ */
 function subscribe(login, devices, callback, scope) {
-  const ws = new SockJS('https://my.leviton.com/socket', {
+  if (!login || !devices || !Array.isArray(devices) || !callback || !scope) {
+    throw new Error('login, devices array, callback, and scope are required')
+  }
+
+  const ws = new SockJS(SOCKET_URL, {
     origin: 'https://my.leviton.com',
     headers: {
-      'Sec-WebSocket-Key': 'J4AAFNBWV3zbd71kD72LMQ==',
       'Sec-WebSocket-Extensions': 'permessage-deflate',
       'Sec-WebSocket-Version': 13,
       Accept: '*/*',
@@ -114,36 +265,76 @@ function subscribe(login, devices, callback, scope) {
 
   ws.onclose = function onclose(ev) {
     scope.log.error(`Socket connection closed: ${JSON.stringify(ev)}`)
+    // Note: Reconnection logic could be added here in the future
   }
 
-  ws.onopen = function onopen(ev) {
-    scope.log.debug(`Socket connection opened: ${JSON.stringify(ev)}`)
+  ws.onopen = function onopen() {
+    scope.log.debug('Socket connection opened')
+  }
+
+  ws.onerror = function onerror(error) {
+    scope.log.error(`Socket error: ${error.message || 'Unknown error'}`)
   }
 
   ws.onmessage = function onmessage(message) {
+    let data
     try {
-      var data = JSON.parse(message.data)
+      data = JSON.parse(message.data)
     } catch (err) {
-      scope.log.error(`Received bad json: ${String(message.data)}`)
+      scope.log.error(`Received bad JSON: ${String(message.data)}`)
+      return
     }
-    if (data.type === 'challenge') {
+
+    if (!data || typeof data !== 'object') {
+      return
+    }
+
+    // Handle challenge message
+    if (data.type === WS_MESSAGE_TYPES.CHALLENGE) {
       const response = [JSON.stringify({ token: login })]
       ws.send(response)
+      return
     }
-    if (data.type === 'status' && data.status === 'ready') {
-      devices.forEach((element) => {
-        ws.send([JSON.stringify({ type: 'subscribe', subscription: { modelName: 'IotSwitch', modelId: element.id } })])
+
+    // Handle status ready message
+    if (data.type === WS_MESSAGE_TYPES.STATUS && data.status === WS_STATUS_READY) {
+      devices.forEach((device) => {
+        if (device && device.id) {
+          ws.send([
+            JSON.stringify({
+              type: 'subscribe',
+              subscription: {
+                modelName: 'IotSwitch',
+                modelId: device.id,
+              },
+            }),
+          ])
+        }
       })
+      return
     }
-    if (data.type === 'notification' && data.notification.data.power) {
+
+    // Handle notification messages
+    if (
+      data.type === WS_MESSAGE_TYPES.NOTIFICATION &&
+      data.notification &&
+      data.notification.data &&
+      data.notification.data.power
+    ) {
       const payload = {
         id: data.notification.modelId,
         power: data.notification.data.power,
       }
-      if (data.notification.data.brightness) payload.brightness = data.notification.data.brightness
+
+      if (data.notification.data.brightness !== undefined) {
+        payload.brightness = data.notification.data.brightness
+      }
+
       callback(payload)
     }
   }
+
+  return ws
 }
 
 module.exports = {
