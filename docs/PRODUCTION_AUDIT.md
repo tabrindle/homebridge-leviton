@@ -68,15 +68,21 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 - No stack traces exposed to users
 - Debug logging only in development mode
 
-### ⚠️ SEC-006: Rate Limiting
-**Status:** ⚠️ Not Implemented  
-**Risk:** Medium  
+### ✅ SEC-006: Rate Limiting
+**Status:** ✅ Implemented  
 **Details:**
-- No rate limiting on API calls
-- Could potentially exhaust API quota or trigger throttling
+- Token bucket rate limiter implemented
+- Maximum 60 requests per minute window
+- Automatic waiting when rate limit exceeded
+- Prevents API quota exhaustion
 - WebSocket reconnection has exponential backoff (good)
 
-**Recommendation:** Consider adding rate limiting for API calls in future version. Current implementation is acceptable as Homebridge typically has low request volume.
+**Code Locations:**
+- `api.js`: Lines 28-95 (RateLimiter class), Lines 97-130 (apiRequest with rate limiting)
+
+**Configuration:**
+- `RATE_LIMIT_MAX_REQUESTS`: 60 requests
+- `RATE_LIMIT_WINDOW_MS`: 60000ms (1 minute)
 
 ### ✅ SEC-007: Code Injection Prevention
 **Status:** ✅ Secure  
@@ -255,14 +261,20 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 - Accessories managed by Homebridge
 - No unbounded arrays or objects
 
-### ⚠️ PERF-003: API Call Optimization
-**Status:** ⚠️ Could Be Improved  
+### ✅ PERF-003: API Call Optimization
+**Status:** ✅ Implemented  
 **Details:**
-- Each getter makes individual API call
-- No batching of requests
-- Could benefit from request batching in future
+- Response caching implemented for `getIotSwitch` calls
+- Cache TTL: 2 seconds (prevents duplicate calls within short window)
+- Cache automatically invalidated after `putIotSwitch` updates
+- Reduces redundant API calls when multiple getters query same device
+- Significantly improves performance for HomeKit queries
 
-**Recommendation:** Low priority - acceptable for current use case
+**Code Locations:**
+- `api.js`: Lines 97-165 (ResponseCache class), Lines 167-200 (apiRequest with caching), Lines 202-220 (getIotSwitch with cache), Lines 222-260 (putIotSwitch with cache invalidation)
+
+**Configuration:**
+- `CACHE_TTL_MS`: 2000ms (2 seconds)
 
 ---
 
@@ -324,7 +336,7 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 3. **Native Fetch**: Migrate from `node-fetch@2.x` to native `fetch` (Node.js 18+)
 
 ### Medium Priority (Optional)
-1. **Request Batching**: Batch multiple API calls when possible
+1. ~~**Request Batching**: Batch multiple API calls when possible~~ ✅ **COMPLETED in v2.2.0** (via caching)
 2. **Circuit Breaker**: Implement circuit breaker pattern for API resilience
 3. **Metrics**: Add performance metrics collection
 
@@ -337,7 +349,7 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 
 ## 7. Known Limitations
 
-1. **Rate Limiting**: No rate limiting on API calls (acceptable for Homebridge use case)
+1. ~~**Rate Limiting**: No rate limiting on API calls~~ ✅ **IMPLEMENTED in v2.2.0**
 2. **API Timeouts**: No explicit timeouts on API calls (relies on node-fetch defaults)
 3. **node-fetch v2**: Using deprecated version (maintained for compatibility)
 

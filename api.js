@@ -13,6 +13,135 @@ const DEFAULT_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
 }
 
+// Rate limiting configuration
+const RATE_LIMIT_MAX_REQUESTS = 60 // Maximum requests per window
+const RATE_LIMIT_WINDOW_MS = 60000 // 1 minute window
+
+// API response cache configuration
+const CACHE_TTL_MS = 2000 // 2 seconds cache TTL
+
+/**
+ * Simple token bucket rate limiter
+ * @class RateLimiter
+ */
+class RateLimiter {
+  constructor(maxRequests = RATE_LIMIT_MAX_REQUESTS, windowMs = RATE_LIMIT_WINDOW_MS) {
+    this.maxRequests = maxRequests
+    this.windowMs = windowMs
+    this.requests = [] // Array of timestamps
+  }
+
+  /**
+   * Acquire a token for a request
+   * @returns {boolean} True if request allowed, false if rate limited
+   */
+  acquire() {
+    const now = Date.now()
+    // Remove requests outside the window
+    this.requests = this.requests.filter((timestamp) => now - timestamp < this.windowMs)
+
+    if (this.requests.length >= this.maxRequests) {
+      return false
+    }
+
+    this.requests.push(now)
+    return true
+  }
+
+  /**
+   * Wait if rate limited, then acquire token
+   * @returns {Promise<void>}
+   */
+  async waitIfNeeded() {
+    while (!this.acquire()) {
+      // Calculate wait time until oldest request expires
+      if (this.requests.length > 0) {
+        const oldest = this.requests[0]
+        const waitTime = this.windowMs - (Date.now() - oldest)
+        if (waitTime > 0) {
+          // Wait for the oldest request to expire (with small increments)
+          await new Promise((resolve) => setTimeout(resolve, Math.min(waitTime, 1000)))
+        } else {
+          // Oldest request expired, remove it and retry
+          this.requests.shift()
+        }
+      } else {
+        // No requests, should be able to acquire
+        break
+      }
+    }
+  }
+}
+
+/**
+ * Simple cache for API responses
+ * @class ResponseCache
+ */
+class ResponseCache {
+  constructor(ttlMs = CACHE_TTL_MS) {
+    this.cache = new Map() // key -> { data, timestamp }
+    this.ttlMs = ttlMs
+  }
+
+  /**
+   * Get cached value if still valid
+   * @param {string} key - Cache key
+   * @returns {Object|null} Cached data or null if expired/missing
+   */
+  get(key) {
+    const entry = this.cache.get(key)
+    if (!entry) {
+      return null
+    }
+
+    const age = Date.now() - entry.timestamp
+    if (age > this.ttlMs) {
+      // Expired, remove from cache
+      this.cache.delete(key)
+      return null
+    }
+
+    return entry.data
+  }
+
+  /**
+   * Set cache value
+   * @param {string} key - Cache key
+   * @param {Object} data - Data to cache
+   */
+  set(key, data) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+    })
+  }
+
+  /**
+   * Clear expired entries
+   */
+  clearExpired() {
+    const now = Date.now()
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.timestamp > this.ttlMs) {
+        this.cache.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Clear all cache entries
+   */
+  clear() {
+    this.cache.clear()
+  }
+}
+
+// Global rate limiter instance
+const rateLimiter = new RateLimiter()
+
+// Global response cache instance
+const responseCache = new ResponseCache()
+
 // WebSocket message types
 const WS_MESSAGE_TYPES = {
   CHALLENGE: 'challenge',
@@ -98,12 +227,22 @@ function getIotSwitch({ switchID, token }) {
     return Promise.reject(new Error('switchID and token are required'))
   }
 
-  return apiRequest(`${BASE_URL}/IotSwitches/${switchID}`, {
-    method: 'GET',
-    headers: {
-      Authorization: token,
+  const url = `${BASE_URL}/IotSwitches/${switchID}`
+  const cacheKey = `getIotSwitch:${switchID}`
+
+  return apiRequest(
+    url,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: token,
+      },
     },
-  })
+    {
+      useCache: true,
+      cacheKey,
+    }
+  )
 }
 
 /**

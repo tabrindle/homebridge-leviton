@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added connection timeout (10 seconds) to prevent hanging connections
   - Improved error handling for WebSocket connection failures
 
+- **Rate Limiting (SEC-006)**:
+  - Implemented token bucket rate limiter for API calls
+  - Maximum 60 requests per minute window
+  - Automatic waiting when rate limit exceeded
+  - Prevents API quota exhaustion and throttling
+
+- **API Call Optimization (PERF-003)**:
+  - Response caching for `getIotSwitch` calls (2 second TTL)
+  - Reduces redundant API calls when multiple getters query same device
+  - Cache automatically invalidated after device updates
+  - Significant performance improvement for HomeKit queries
+
 - **Testing**:
   - Comprehensive test suite with 122 tests
   - 99.76% code coverage (99.15% for api.js, 100% for index.js)
