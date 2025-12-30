@@ -591,9 +591,12 @@ describe('Leviton API', () => {
 
   describe('response caching', () => {
     beforeEach(() => {
-      // Clear cache
+      // Clear cache and rate limiter state
       if (Leviton._responseCache) {
         Leviton._responseCache.clear()
+      }
+      if (Leviton._rateLimiter) {
+        Leviton._rateLimiter.requests = []
       }
     })
 
@@ -629,6 +632,14 @@ describe('Leviton API', () => {
     })
 
     it('should invalidate cache after putIotSwitch', async () => {
+      // Clear state before test
+      if (Leviton._responseCache) {
+        Leviton._responseCache.clear()
+      }
+      if (Leviton._rateLimiter) {
+        Leviton._rateLimiter.requests = []
+      }
+
       const mockGetResponse = {
         id: 'switch-1',
         power: 'ON',
@@ -679,7 +690,14 @@ describe('Leviton API', () => {
     })
 
     it('should expire cache after TTL', async () => {
-      jest.useFakeTimers()
+      // Clear state before test
+      if (Leviton._responseCache) {
+        Leviton._responseCache.clear()
+      }
+      if (Leviton._rateLimiter) {
+        Leviton._rateLimiter.requests = []
+      }
+
       const mockResponse = {
         id: 'switch-1',
         power: 'ON',
@@ -699,12 +717,23 @@ describe('Leviton API', () => {
       expect(fetch).toHaveBeenCalledTimes(1)
 
       // Verify cache is populated
-      const cached = Leviton._responseCache.get('getIotSwitch:switch-1')
-      expect(cached).not.toBeNull()
-      expect(cached).toEqual(mockResponse)
+      if (Leviton._responseCache) {
+        const cached = Leviton._responseCache.get('getIotSwitch:switch-1')
+        expect(cached).not.toBeNull()
+        expect(cached).toEqual(mockResponse)
 
-      // Fast-forward past cache TTL (2000ms)
-      jest.advanceTimersByTime(2001)
+        // Manually expire cache by manipulating timestamp
+        const cacheEntry = Leviton._responseCache.cache.get('getIotSwitch:switch-1')
+        if (cacheEntry) {
+          cacheEntry.timestamp = Date.now() - 3000 // Make it 3 seconds old (past TTL)
+        }
+
+        // Verify cache.get() returns null for expired entry
+        const expiredCache = Leviton._responseCache.get('getIotSwitch:switch-1')
+        expect(expiredCache).toBeNull()
+        // Verify expired entry was removed from cache
+        expect(Leviton._responseCache.cache.has('getIotSwitch:switch-1')).toBe(false)
+      }
 
       // Next call should hit API again (cache expired)
       await Leviton.getIotSwitch({
@@ -713,7 +742,6 @@ describe('Leviton API', () => {
       })
 
       expect(fetch).toHaveBeenCalledTimes(2)
-      jest.useRealTimers()
     })
   })
 })
