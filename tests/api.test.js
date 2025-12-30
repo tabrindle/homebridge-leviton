@@ -195,6 +195,20 @@ describe('Leviton API', () => {
     it('should reject with missing parameters', async () => {
       await expect(Leviton.getIotSwitch({ switchID: 'test' })).rejects.toThrow('switchID and token are required')
     })
+
+    it('should handle API request timeout', async () => {
+      // Mock fetch to reject with AbortError (simulating timeout)
+      const abortError = new Error('The operation was aborted')
+      abortError.name = 'AbortError'
+      fetch.mockRejectedValue(abortError)
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('API request timeout after 10000ms')
+    })
   })
 
   describe('putIotSwitch', () => {
