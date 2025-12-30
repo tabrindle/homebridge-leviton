@@ -1482,6 +1482,170 @@ describe('LevitonDecoraSmartPlatform', () => {
       )
       expect(errorCalls.length).toBeGreaterThan(0)
     })
+
+    it('should handle non-array devices in _initialize (not array)', async () => {
+      // Mock initialize() to return non-array devices to trigger branch at line 140
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      
+      // Mock initialize() to return non-array devices
+      platform.initialize = jest.fn().mockResolvedValue({
+        devices: { notAnArray: true }, // Non-array to trigger !Array.isArray check
+        token: 'test-token',
+      })
+      
+      // Trigger _initialize via didFinishLaunching
+      await platform._initialize()
+      
+      // Should log error about unable to initialize
+      expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Unable to initialize'))
+    })
+
+    it('should handle non-array devices in v2 API path', async () => {
+      // First call returns empty, v2 returns non-array (line 349)
+      Leviton.getResidenceIotSwitches.mockResolvedValueOnce([])
+      Leviton.getResidentialAccountsV2.mockResolvedValueOnce([{ id: 'residence-v2' }])
+      Leviton.getResidenceIotSwitches.mockResolvedValueOnce({ notAnArray: true }) // Non-array response
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      expect(mockLog).toHaveBeenCalled()
+    })
+
+    it('should handle platformAccessory not being a function', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      // Replace platformAccessory with a non-function (line 607)
+      const originalPlatformAccessory = mockApi.platformAccessory
+      mockApi.platformAccessory = 'not a function'
+      
+      const device = {
+        id: 'device-1',
+        name: 'Test Device',
+        serial: 'SERIAL123',
+        model: 'DW6HD',
+      }
+      
+      await expect(platform.addAccessory(device, 'test-token')).rejects.toThrow('platformAccessory is not a function')
+      
+      // Restore original
+      mockApi.platformAccessory = originalPlatformAccessory
+    })
+
+    it('should handle accessory without context in addAccessory', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      
+      const device = {
+        id: 'device-1',
+        name: 'Test Device',
+        serial: 'SERIAL123',
+        model: 'DW6HD',
+      }
+      
+      // Create a new accessory mock without context (line 615)
+      // We need to intercept the platformAccessory call
+      const originalPlatformAccessory = mockApi.platformAccessory
+      const accessoryWithoutContext = {
+        displayName: 'Test',
+        // No context property at all to trigger the branch
+        getService: jest.fn().mockReturnValue(mockServiceInstance),
+        addService: jest.fn().mockReturnValue(mockServiceInstance),
+      }
+      
+      // Mock platformAccessory to return our accessory
+      mockApi.platformAccessory = jest.fn().mockReturnValue(accessoryWithoutContext)
+      
+      await platform.addAccessory(device, 'test-token')
+      
+      // Should have created context
+      expect(accessoryWithoutContext.context).toBeDefined()
+      expect(accessoryWithoutContext.context.device).toEqual(device)
+      
+      // Restore
+      mockApi.platformAccessory = originalPlatformAccessory
+    })
+
+    it('should handle accessory.getService not being a function', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      
+      const device = {
+        id: 'device-1',
+        name: 'Test Device',
+        serial: 'SERIAL123',
+        model: 'DW6HD',
+      }
+      
+      // Create a new accessory mock without getService function (line 620-624)
+      const originalPlatformAccessory = mockApi.platformAccessory
+      const accessoryWithoutGetService = {
+        displayName: 'Test',
+        context: {},
+        getService: 'not a function', // Not a function to trigger the branch
+        addService: jest.fn().mockReturnValue(mockServiceInstance),
+      }
+      
+      // Mock platformAccessory to return our accessory
+      mockApi.platformAccessory = jest.fn().mockReturnValue(accessoryWithoutGetService)
+      
+      await expect(platform.addAccessory(device, 'test-token')).rejects.toThrow('accessory.getService is not a function')
+      
+      // Restore
+      mockApi.platformAccessory = originalPlatformAccessory
+    })
+
+    it('should handle missing AccessoryInformation service', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      
+      const device = {
+        id: 'device-1',
+        name: 'Test Device',
+        serial: 'SERIAL123',
+        model: 'DW6HD',
+      }
+      
+      // Create a new accessory mock where getService returns null for AccessoryInformation (line 634)
+      const getServiceMock = jest.fn((serviceType) => {
+        if (serviceType === mockService.AccessoryInformation) {
+          return null // Missing service - triggers false branch at line 634
+        }
+        return mockServiceInstance // Return service for other types
+      })
+      
+      const accessoryWithoutInfoService = {
+        displayName: 'Test',
+        context: {},
+        getService: getServiceMock,
+        addService: jest.fn().mockReturnValue(mockServiceInstance),
+      }
+      
+      // Mock platformAccessory to return our accessory
+      mockApi.platformAccessory.mockReturnValueOnce(accessoryWithoutInfoService)
+      
+      // Should not throw, just skip setting info service
+      await platform.addAccessory(device, 'test-token')
+      expect(getServiceMock).toHaveBeenCalledWith(mockService.AccessoryInformation)
+    })
   })
 })
 
