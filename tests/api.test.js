@@ -563,7 +563,7 @@ describe('Leviton API', () => {
     })
 
     it('should wait when rate limit is exceeded', async () => {
-      const startTime = Date.now()
+      jest.useFakeTimers()
       fetch.mockResolvedValue({
         ok: true,
         json: async () => ({ id: 'test' }),
@@ -587,19 +587,24 @@ describe('Leviton API', () => {
         token: 'token-123',
       })
 
+      // Fast-forward time to allow rate limiter to proceed
+      jest.advanceTimersByTime(1000)
+
       // This should complete (after waiting)
       await extraPromise
 
-      const endTime = Date.now()
-      // Should have waited at least a bit (though timing may vary)
+      // Should have made all requests
       expect(fetch).toHaveBeenCalledTimes(RATE_LIMIT_MAX_REQUESTS + 1)
+      jest.useRealTimers()
     })
   })
 
   describe('response caching', () => {
     beforeEach(() => {
       // Clear cache
-      Leviton._responseCache.clear()
+      if (Leviton._responseCache) {
+        Leviton._responseCache.clear()
+      }
     })
 
     it('should cache getIotSwitch responses', async () => {
@@ -684,6 +689,7 @@ describe('Leviton API', () => {
     })
 
     it('should expire cache after TTL', async () => {
+      jest.useFakeTimers()
       const mockResponse = {
         id: 'switch-1',
         power: 'ON',
@@ -702,22 +708,22 @@ describe('Leviton API', () => {
 
       expect(fetch).toHaveBeenCalledTimes(1)
 
-      // Wait for cache to expire (mock time)
-      // Note: In real scenario, we'd use jest.useFakeTimers, but for simplicity
-      // we'll just verify the cache works within TTL
+      // Verify cache is populated
       const cached = Leviton._responseCache.get('getIotSwitch:switch-1')
       expect(cached).not.toBeNull()
+      expect(cached).toEqual(mockResponse)
 
-      // Manually expire cache
-      Leviton._responseCache.cache.clear()
+      // Fast-forward past cache TTL (2000ms)
+      jest.advanceTimersByTime(2001)
 
-      // Next call should hit API again
+      // Next call should hit API again (cache expired)
       await Leviton.getIotSwitch({
         switchID: 'switch-1',
         token: 'token-123',
       })
 
       expect(fetch).toHaveBeenCalledTimes(2)
+      jest.useRealTimers()
     })
   })
 })

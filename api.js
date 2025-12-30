@@ -164,13 +164,29 @@ function toQueryString(params) {
 }
 
 /**
- * Makes an API request with error handling
+ * Makes an API request with error handling, rate limiting, and optional caching
  * @param {string} url - API endpoint URL
  * @param {Object} options - Fetch options
+ * @param {Object} [cacheOptions] - Cache options
+ * @param {boolean} [cacheOptions.useCache] - Whether to use cache (default: false)
+ * @param {string} [cacheOptions.cacheKey] - Cache key (default: url)
  * @returns {Promise<Object>} JSON response
  * @throws {Error} If request fails or response is not OK
  */
-async function apiRequest(url, options = {}) {
+async function apiRequest(url, options = {}, cacheOptions = {}) {
+  const { useCache = false, cacheKey = url } = cacheOptions
+
+  // Check cache first if enabled
+  if (useCache) {
+    const cached = responseCache.get(cacheKey)
+    if (cached !== null) {
+      return cached
+    }
+  }
+
+  // Rate limiting: wait if needed
+  await rateLimiter.waitIfNeeded()
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -184,7 +200,14 @@ async function apiRequest(url, options = {}) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`)
     }
 
-    return await response.json()
+    const data = await response.json()
+
+    // Cache response if enabled
+    if (useCache) {
+      responseCache.set(cacheKey, data)
+    }
+
+    return data
   } catch (error) {
     // Re-throw API errors as-is
     if (error.message && error.message.includes('API request failed')) {
@@ -277,12 +300,26 @@ function putIotSwitch({ switchID, power, brightness, token }) {
     return Promise.reject(new Error('At least one of power or brightness must be provided'))
   }
 
-  return apiRequest(`${BASE_URL}/IotSwitches/${switchID}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-    headers: {
-      Authorization: token,
+  const url = `${BASE_URL}/IotSwitches/${switchID}`
+  const cacheKey = `getIotSwitch:${switchID}`
+
+  // Update device (no caching for PUT requests)
+  return apiRequest(
+    url,
+    {
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: token,
+      },
     },
+    {
+      useCache: false,
+    }
+  ).then((result) => {
+    // Invalidate cache for this device after successful update
+    responseCache.cache.delete(cacheKey)
+    return result
   })
 }
 
@@ -567,4 +604,8 @@ module.exports = {
   postPersonLogin,
   putIotSwitch,
   subscribe,
+  // Expose rate limiter and cache for testing and advanced usage
+  _rateLimiter: rateLimiter,
+  _responseCache: responseCache,
+  RATE_LIMIT_MAX_REQUESTS,
 }
