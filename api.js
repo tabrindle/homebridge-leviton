@@ -280,7 +280,8 @@ function subscribe(login, devices, callback, scope) {
     let data
     try {
       data = JSON.parse(message.data)
-    } catch (_err) {
+    } catch {
+      // Ignore parse errors - log and return
       scope.log.error(`Received bad JSON: ${String(message.data)}`)
       return
     }
