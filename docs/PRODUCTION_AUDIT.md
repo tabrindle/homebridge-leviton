@@ -125,7 +125,9 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 **Implementation:**
 - Uses AbortController for API request timeouts
 - Timeout errors are caught and converted to user-friendly messages
-- Addresses GitHub issue #41: Better handling for my.leviton API slowness
+- Content-Type validation before JSON parsing
+- Handles HTML error pages and invalid JSON gracefully
+- Addresses GitHub issues #41 and #43: Better handling for my.leviton API slowness and malformed responses
 
 ### ✅ REL-003: Resource Cleanup
 **Status:** ✅ Proper Cleanup  

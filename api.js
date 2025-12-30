@@ -209,10 +209,41 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     clearTimeout(timeoutId)
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+      // Try to get response text for better error messages
+      let errorBody = ''
+      try {
+        const contentType = response.headers.get('content-type') || ''
+        if (contentType.includes('text/html')) {
+          // API returned HTML (likely an error page)
+          const text = await response.text()
+          errorBody = ` (received HTML instead of JSON)`
+        } else {
+          errorBody = await response.text()
+          if (errorBody.length > 200) {
+            errorBody = errorBody.substring(0, 200) + '...'
+          }
+        }
+      } catch {
+        // Ignore errors when reading error response
+      }
+      throw new Error(`API request failed: ${response.status} ${response.statusText}${errorBody}`)
     }
 
-    const data = await response.json()
+    // Check Content-Type before parsing JSON
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json') && !contentType.includes('text/json')) {
+      const text = await response.text()
+      throw new Error(`API returned non-JSON response (Content-Type: ${contentType}). Response: ${text.substring(0, 200)}`)
+    }
+
+    let data
+    try {
+      data = await response.json()
+    } catch (jsonError) {
+      // Handle JSON parsing errors (e.g., when API returns HTML)
+      const text = await response.text()
+      throw new Error(`Failed to parse JSON response: ${jsonError.message}. Response body: ${text.substring(0, 200)}`)
+    }
 
     // Cache response if enabled
     if (useCache) {
@@ -228,8 +259,12 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
       throw new Error(`API request timeout after ${API_REQUEST_TIMEOUT_MS}ms`)
     }
 
-    // Re-throw API errors as-is
-    if (error.message && error.message.includes('API request failed')) {
+    // Re-throw API errors as-is (they already have good context)
+    if (error.message && (
+      error.message.includes('API request failed') ||
+      error.message.includes('Failed to parse JSON') ||
+      error.message.includes('API returned non-JSON')
+    )) {
       throw error
     }
     // Wrap network errors with more context

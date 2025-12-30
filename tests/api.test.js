@@ -209,6 +209,74 @@ describe('Leviton API', () => {
         })
       ).rejects.toThrow('API request timeout after 10000ms')
     })
+
+    it('should handle HTML response instead of JSON', async () => {
+      // Mock API returning HTML (error page) instead of JSON
+      fetch.mockResolvedValue({
+        ok: true,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'text/html'
+            return null
+          }),
+        },
+        text: async () => '<html><body>Error 500</body></html>',
+      })
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('API returned non-JSON response')
+    })
+
+    it('should handle invalid JSON response', async () => {
+      // Mock API returning invalid JSON
+      fetch.mockResolvedValue({
+        ok: true,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON at position 0')
+        },
+        text: async () => '<html><body>Error</body></html>',
+      })
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('Failed to parse JSON response')
+    })
+
+    it('should handle non-200 response with HTML error page', async () => {
+      // Mock API returning HTML error page for non-200 status
+      fetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'text/html'
+            return null
+          }),
+        },
+        text: async () => '<html><body>Server Error</body></html>',
+      })
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('API request failed: 500 Internal Server Error')
+    })
   })
 
   describe('putIotSwitch', () => {

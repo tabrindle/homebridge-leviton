@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improves handling of my.leviton API slowness
   - Reduces log volume during API issues
 
+- **JSON Parsing Error Handling (Issue #43)**:
+  - Added Content-Type validation before parsing JSON responses
+  - Handles cases where API returns HTML error pages instead of JSON
+  - Prevents "Unexpected token < in JSON" crashes
+  - Provides clear error messages when API returns invalid responses
+  - Prevents Homebridge crashes from malformed API responses
+
 - **Testing**:
   - Comprehensive test suite with 122 tests
   - 99.76% code coverage (99.15% for api.js, 100% for index.js)
