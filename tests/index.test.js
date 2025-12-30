@@ -340,7 +340,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 150))
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to initialize'))
     })
@@ -354,7 +354,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 300))
       expect(Leviton.getResidentialAccountsV2).toHaveBeenCalled()
     })
@@ -365,7 +365,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 150))
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to initialize'))
     })
@@ -376,7 +376,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 150))
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to initialize'))
     })
@@ -387,7 +387,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 150))
       expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to initialize'))
     })
@@ -399,7 +399,7 @@ describe('LevitonDecoraSmartPlatform', () => {
         email: 'test@example.com',
         password: 'password123',
       }
-      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 300))
       expect(mockLog).toHaveBeenCalled()
     })
