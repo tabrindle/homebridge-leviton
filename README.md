@@ -214,6 +214,19 @@ Coverage report shows:
 - **Functions**: 97.1%
 - **Lines**: 96.12%
 
+### Documentation
+
+Additional documentation is available in the [`docs/`](docs/) directory:
+
+- **[Code Evaluation](docs/CODE_EVALUATION.md)** - Initial codebase evaluation
+- **[Refactoring Summary](docs/REFACTORING_SUMMARY.md)** - Complete refactoring details
+- **[Test Setup](docs/TEST_SETUP.md)** - Test setup and configuration guide
+- **[Test Status](docs/TEST_STATUS.md)** - Current test status and metrics
+- **[Sandbox Testing](docs/SANDBOX_TESTING.md)** - Sandbox testing documentation
+- **[Test Fix Plan](docs/TEST_FIX_PLAN.md)** - Test fix analysis and solution
+- **[Homebridge v2.0 Upgrade](docs/HOMEBRIDGE_V2_UPGRADE.md)** - Upgrade guide
+- **[Deprecation Fixes](docs/DEPRECATION_FIXES.md)** - npm deprecation fixes
+
 ### Linting
 
 ```bash
