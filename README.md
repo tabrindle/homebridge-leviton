@@ -192,30 +192,6 @@ Set the log level in your configuration:
 }
 ```
 
-## Development
-
-### Running Tests
-
-```bash
-npm test
-```
-
-All 106 tests are currently passing with 96%+ code coverage.
-
-### Running Tests with Coverage
-
-Coverage is automatically included when running tests:
-
-```bash
-npm test
-```
-
-Coverage report shows:
-- **Statements**: 96.17%
-- **Branches**: 89.65%
-- **Functions**: 97.1%
-- **Lines**: 96.12%
-
 ### Documentation
 
 Additional documentation is available in the [`docs/`](docs/) directory:
@@ -228,18 +204,6 @@ Additional documentation is available in the [`docs/`](docs/) directory:
 - **[Test Fix Plan](docs/TEST_FIX_PLAN.md)** - Test fix analysis and solution
 - **[Homebridge v2.0 Upgrade](docs/HOMEBRIDGE_V2_UPGRADE.md)** - Upgrade guide
 - **[Deprecation Fixes](docs/DEPRECATION_FIXES.md)** - npm deprecation fixes
-
-### Linting
-
-```bash
-npm run lint
-```
-
-### Fixing Lint Issues
-
-```bash
-npm run lint:fix
-```
 
 ## Requirements
 
@@ -265,6 +229,30 @@ npm run lint:fix
 
 > **Security Note**: Ensure your `config.json` file has appropriate file permissions (600 recommended) to protect your credentials.
 
+## Development
+
+### Running Tests
+
+```bash
+npm test
+```
+
+All 106 tests are currently passing with 96%+ code coverage.
+
+### Running Tests with Coverage
+
+Coverage is automatically included when running tests:
+
+```bash
+npm test
+```
+
+Coverage report shows:
+- **Statements**: 96.17%
+- **Branches**: 89.65%
+- **Functions**: 97.1%
+- **Lines**: 96.12%
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -274,24 +262,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## Changelog
-
-### v2.2.0
-- ✅ Refactored codebase with improved error handling
-- ✅ Fixed critical bugs (config property mismatch, callback errors)
-- ✅ Added comprehensive test suite (106 tests, 96%+ coverage)
-- ✅ Fixed Jest constructor mocking issues for platformAccessory
-- ✅ Resolved async initialization test failures
-- ✅ All tests passing (106/106)
-- ✅ Added JSDoc documentation
-- ✅ Updated for Homebridge v2.0 compatibility
-- ✅ Improved input validation
-- ✅ Enhanced logging and error messages
-- ✅ Fixed npm deprecation warnings (ESLint v9 migration)
-
-### v2.1.0
-- Previous stable version
 
 ## License
 
