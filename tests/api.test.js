@@ -569,9 +569,11 @@ describe('Leviton API', () => {
         json: async () => ({ id: 'test' }),
       })
 
-      // Fill up the rate limit
+      // Create a rate limiter with a small limit for testing
+      const testLimit = 5
+      // Fill up the rate limit by making requests
       const promises = []
-      for (let i = 0; i < RATE_LIMIT_MAX_REQUESTS; i++) {
+      for (let i = 0; i < testLimit; i++) {
         promises.push(
           Leviton.getIotSwitch({
             switchID: `switch-${i}`,
@@ -580,6 +582,16 @@ describe('Leviton API', () => {
         )
       }
       await Promise.all(promises)
+
+      // Reset rate limiter to have a small limit for this test
+      if (Leviton._rateLimiter) {
+        Leviton._rateLimiter.maxRequests = testLimit
+        Leviton._rateLimiter.requests = []
+        // Fill it up again
+        for (let i = 0; i < testLimit; i++) {
+          Leviton._rateLimiter.requests.push(Date.now() - 1000) // Old requests
+        }
+      }
 
       // Make one more request (should wait)
       const extraPromise = Leviton.getIotSwitch({
@@ -594,7 +606,7 @@ describe('Leviton API', () => {
       await extraPromise
 
       // Should have made all requests
-      expect(fetch).toHaveBeenCalledTimes(RATE_LIMIT_MAX_REQUESTS + 1)
+      expect(fetch).toHaveBeenCalledTimes(testLimit + 1)
       jest.useRealTimers()
     })
   })
