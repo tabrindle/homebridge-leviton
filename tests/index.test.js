@@ -44,9 +44,8 @@ let LevitonDecoraSmartPlatform
 describe('LevitonDecoraSmartPlatform', () => {
   beforeEach(() => {
     // Clear mocks but preserve implementations
+    // IMPORTANT: Clear mocks BEFORE setting up new ones to avoid interference
     jest.clearAllMocks()
-    // Note: clearAllMocks() only clears call history, not implementations
-    // So our mock implementations set below will remain intact
 
     // Reset all Leviton API mocks and set up fresh mocks
     Leviton.postPersonLogin = jest.fn().mockResolvedValue({
@@ -115,11 +114,10 @@ describe('LevitonDecoraSmartPlatform', () => {
       generate: jest.fn().mockReturnValue('test-uuid'),
     }
     
-    // Create the mock function that always returns an object with context
-    // When called with 'new', the returned object is used as the instance
-    const platformAccessoryMock = jest.fn()
-    platformAccessoryMock.mockImplementation(function (name, uuid) {
-      // Track services that have been added (closure)
+    // CRITICAL FIX: jest.fn() breaks 'new' behavior, so we create a real constructor
+    // and attach Jest mock properties manually
+    function PlatformAccessoryConstructor(name, uuid) {
+      // Track services that have been added (closure - each call gets its own)
       const services = {}
       
       // Create service instance template
@@ -133,32 +131,88 @@ describe('LevitonDecoraSmartPlatform', () => {
       
       // Create getService as a jest.fn() so it can be used for both calling and assertions
       const getServiceMock = jest.fn((serviceType) => {
-        // Return the service if it exists, otherwise null
         return services[serviceType] || null
       })
       
       // Create addService as a jest.fn() 
       const addServiceMock = jest.fn((serviceType, serviceName) => {
-        // When addService is called, create and store the service
         const newService = {
           serviceType: serviceType,
           name: serviceName,
           ...createServiceInstance(),
         }
-        // Store the service so getService can return it
         services[serviceType] = newService
         return newService
       })
       
-      // Create and return the accessory object
-      // When using 'new', if a function returns an object, that object is used
-      return {
+      // Create the accessory object (for non-new calls)
+      const accessory = {
         displayName: name,
-        context: {}, // Always initialize as empty object
-        getService: getServiceMock, // jest.fn() so it can be used for assertions
-        addService: addServiceMock,  // jest.fn() so it can be used for assertions
+        context: {},
+        getService: getServiceMock,
+        addService: addServiceMock,
       }
-    })
+      
+      // Check if called with 'new'
+      if (new.target) {
+        // Called with 'new' - MUST set ALL properties on 'this'
+        // CRITICAL: Set properties in a way that ensures they're enumerable
+        this.displayName = name
+        this.context = {}
+        this.getService = getServiceMock
+        this.addService = addServiceMock
+        
+        // Verify properties were set (defensive check)
+        if (!this.getService || typeof this.getService !== 'function') {
+          throw new Error('Failed to set getService on this')
+        }
+        
+        return this
+      } else {
+        // Called without 'new' - return the object directly
+        return accessory
+      }
+    }
+    
+    // Create a wrapper that tracks calls but doesn't interfere with 'new'
+    const callTracker = {
+      calls: [],
+      instances: [],
+      results: [],
+    }
+    
+    function platformAccessoryMock(name, uuid) {
+      callTracker.calls.push([name, uuid])
+      
+      // Check if called with 'new'
+      if (new.target) {
+        // Called with 'new' - call constructor with 'new'
+        const result = new PlatformAccessoryConstructor(name, uuid)
+        callTracker.instances.push(result)
+        callTracker.results.push({ type: 'return', value: result })
+        return result
+      } else {
+        // Called without 'new' - call constructor without 'new' (returns object)
+        const result = PlatformAccessoryConstructor(name, uuid)
+        callTracker.results.push({ type: 'return', value: result })
+        return result
+      }
+    }
+    
+    // Attach Jest-compatible mock object
+    platformAccessoryMock.mock = callTracker
+    platformAccessoryMock.mockImplementation = function(fn) {
+      // Not used, but needed for Jest compatibility
+    }
+    platformAccessoryMock.mockReturnValue = function(value) {
+      // Not used, but needed for Jest compatibility
+    }
+    platformAccessoryMock.mockResolvedValue = function(value) {
+      // Not used, but needed for Jest compatibility
+    }
+    
+    // Make it work with jest.fn() expectations
+    Object.setPrototypeOf(platformAccessoryMock, jest.fn())
     
     mockApi = {
       platformAccessory: platformAccessoryMock,
@@ -790,8 +844,15 @@ describe('LevitonDecoraSmartPlatform', () => {
 
     it('should handle errors in getters', async () => {
       // Reset and set up mock BEFORE creating platform to avoid async initialization issues
+      // CRITICAL: mockReset() clears the implementation, so we must set it again
       Leviton.getIotSwitch.mockReset()
-      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
+      // Set default implementation for async initialization
+      Leviton.getIotSwitch.mockResolvedValue({
+        power: 'ON',
+        brightness: 75,
+        minLevel: 1,
+        maxLevel: 100,
+      })
       const config = {
         email: 'test@example.com',
         password: 'password123',
@@ -799,6 +860,10 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       // Wait for async initialization to complete
       await new Promise((resolve) => setTimeout(resolve, 50))
+      
+      // NOW set the error for the actual test call (after initialization)
+      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
+      
       const device = {
         id: 'device-1',
         name: 'Test Device',
@@ -816,7 +881,13 @@ describe('LevitonDecoraSmartPlatform', () => {
     it('should handle invalid response in power getter', async () => {
       // Reset and set up mock BEFORE creating platform
       Leviton.getIotSwitch.mockReset()
-      Leviton.getIotSwitch.mockResolvedValueOnce(null)
+      // Set default implementation for async initialization
+      Leviton.getIotSwitch.mockResolvedValue({
+        power: 'ON',
+        brightness: 75,
+        minLevel: 1,
+        maxLevel: 100,
+      })
       const config = {
         email: 'test@example.com',
         password: 'password123',
@@ -824,6 +895,9 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       // Wait for async initialization to complete
       await new Promise((resolve) => setTimeout(resolve, 50))
+      
+      // NOW set the null response for the actual test call (after initialization)
+      Leviton.getIotSwitch.mockResolvedValueOnce(null)
       const device = {
         id: 'device-1',
         name: 'Test Device',
@@ -948,7 +1022,13 @@ describe('LevitonDecoraSmartPlatform', () => {
     it('should handle errors in brightness getter', async () => {
       // Reset and set up mock BEFORE creating platform
       Leviton.getIotSwitch.mockReset()
-      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
+      // Set default implementation for async initialization
+      Leviton.getIotSwitch.mockResolvedValue({
+        power: 'ON',
+        brightness: 75,
+        minLevel: 1,
+        maxLevel: 100,
+      })
       const config = {
         email: 'test@example.com',
         password: 'password123',
@@ -956,6 +1036,9 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       // Wait for async initialization to complete
       await new Promise((resolve) => setTimeout(resolve, 50))
+      
+      // NOW set the error for the actual test call (after initialization)
+      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
       const device = {
         id: 'device-1',
         name: 'Test Device',
@@ -993,7 +1076,13 @@ describe('LevitonDecoraSmartPlatform', () => {
     it('should handle errors in rotation speed getter', async () => {
       // Reset and set up mock BEFORE creating platform
       Leviton.getIotSwitch.mockReset()
-      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
+      // Set default implementation for async initialization
+      Leviton.getIotSwitch.mockResolvedValue({
+        power: 'ON',
+        brightness: 75,
+        minLevel: 1,
+        maxLevel: 100,
+      })
       const config = {
         email: 'test@example.com',
         password: 'password123',
@@ -1001,6 +1090,9 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       // Wait for async initialization to complete
       await new Promise((resolve) => setTimeout(resolve, 50))
+      
+      // NOW set the error for the actual test call (after initialization)
+      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
       const device = {
         id: 'device-1',
         name: 'Test Device',
@@ -1273,7 +1365,13 @@ describe('LevitonDecoraSmartPlatform', () => {
     it('should handle invalid response in onGetBrightness', async () => {
       // Reset and set up mock BEFORE creating platform
       Leviton.getIotSwitch.mockReset()
-      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON' }) // Missing brightness
+      // Set default implementation for async initialization
+      Leviton.getIotSwitch.mockResolvedValue({
+        power: 'ON',
+        brightness: 75,
+        minLevel: 1,
+        maxLevel: 100,
+      })
       const config = {
         email: 'test@example.com',
         password: 'password123',
@@ -1281,6 +1379,9 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       // Wait for async initialization to complete
       await new Promise((resolve) => setTimeout(resolve, 50))
+      
+      // NOW set the invalid response for the actual test call (after initialization)
+      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON' }) // Missing brightness
       const device = { id: 'device-1', name: 'Test' }
       const callback = jest.fn()
       const getter = platform.onGetBrightness(mockServiceInstance, device, 'token')
@@ -1320,7 +1421,13 @@ describe('LevitonDecoraSmartPlatform', () => {
     it('should handle invalid response in onGetRotationSpeed', async () => {
       // Reset and set up mock BEFORE creating platform
       Leviton.getIotSwitch.mockReset()
-      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON' }) // Missing brightness
+      // Set default implementation for async initialization
+      Leviton.getIotSwitch.mockResolvedValue({
+        power: 'ON',
+        brightness: 75,
+        minLevel: 1,
+        maxLevel: 100,
+      })
       const config = {
         email: 'test@example.com',
         password: 'password123',
@@ -1328,6 +1435,9 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       // Wait for async initialization to complete
       await new Promise((resolve) => setTimeout(resolve, 50))
+      
+      // NOW set the invalid response for the actual test call (after initialization)
+      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON' }) // Missing brightness
       const device = { id: 'device-1', name: 'Test' }
       const callback = jest.fn()
       const getter = platform.onGetRotationSpeed(mockServiceInstance, device, 'token')
@@ -1352,8 +1462,10 @@ describe('LevitonDecoraSmartPlatform', () => {
     })
 
     it('should handle WebSocket subscription error', async () => {
+      // Reset subscribe mock to ensure clean state
+      Leviton.subscribe.mockReset()
       // Setup successful initialization but fail on subscribe
-      Leviton.subscribe.mockImplementationOnce(() => {
+      Leviton.subscribe.mockImplementation(() => {
         throw new Error('WebSocket error')
       })
       const config = {
@@ -1363,7 +1475,12 @@ describe('LevitonDecoraSmartPlatform', () => {
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 400))
       // Should log error about subscription
-      expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Error subscribing'))
+      // The error is logged via platform.log.error, which calls mockLog
+      // Check if mockLog was called with the error message
+      const errorCalls = mockLog.mock.calls.filter(call => 
+        call[0] && typeof call[0] === 'string' && call[0].includes('Error subscribing')
+      )
+      expect(errorCalls.length).toBeGreaterThan(0)
     })
   })
 })

@@ -602,11 +602,27 @@ class LevitonDecoraSmartPlatform {
 
     // Generate UUID based on device serial and create accessory
     const uuid = UUID.generate(device.serial)
+    
+    // Defensive check: ensure platformAccessory is a function
+    if (typeof this.api.platformAccessory !== 'function') {
+      this.log.error(`platformAccessory is not a function: ${typeof this.api.platformAccessory}`)
+      throw new Error('platformAccessory is not a function')
+    }
+    
     const accessory = new this.api.platformAccessory(device.name, uuid)
 
     // Ensure context exists (defensive check for test environment)
     if (!accessory.context) {
       accessory.context = {}
+    }
+    
+    // Defensive check: ensure getService is a function
+    if (typeof accessory.getService !== 'function') {
+      const keys = Object.keys(accessory)
+      const getServiceType = typeof accessory.getService
+      const getServiceValue = accessory.getService
+      this.log.error(`accessory.getService is not a function: type=${getServiceType}, value=${getServiceValue}, keys=${keys.join(', ')}, accessory=${JSON.stringify(accessory, null, 2)}`)
+      throw new Error(`accessory.getService is not a function (type: ${getServiceType}, keys: ${keys.join(', ')})`)
     }
 
     // Save device and token information to context
