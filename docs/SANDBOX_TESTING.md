@@ -4,7 +4,7 @@
 
 **Last Updated:** 2025-01-27  
 **Version:** 2.2.0  
-**Tests:** 122 passing, 99.76% coverage
+**Tests:** 139 passing, 99.21% coverage (90.96% branches)
 
 All tests run in a **completely sandboxed environment** to ensure:
 

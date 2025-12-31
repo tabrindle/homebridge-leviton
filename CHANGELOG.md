@@ -41,9 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prevents Homebridge crashes from malformed API responses
 
 - **Testing**:
-  - Comprehensive test suite with 122 tests
-  - 99.76% code coverage (99.15% for api.js, 100% for index.js)
+  - Comprehensive test suite with 139 tests
+  - 99.21% code coverage (98% statements, 90.96% branches for api.js, 100% for index.js)
   - Tests for WebSocket reconnection, timeout, and error scenarios
+  - Tests for rate limiter edge cases (empty requests, expired requests, waitTime > 0)
+  - Tests for API response handling (empty body, invalid JSON, HTML responses)
   - Sandboxed test environment
 
 - **Documentation**:
@@ -53,14 +55,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **WebSocket Token Handling**: Now correctly sends `login.id` (token string) instead of full login object
-- **Error Handling**: Enhanced error messages with better context
+- **Error Handling**: Enhanced error messages with better context and response body previews
 - **Code Quality**: All ESLint errors resolved, consistent code style
+- **API Response Handling**: Refactored to read response body once and use consistently throughout
+- **Test Mocks**: Updated to use `text()` instead of `json()` to match actual API response handling
 
 ### Fixed
 - WebSocket challenge response now uses correct token format
 - WebSocket reconnection properly handles errors
 - Connection timeout properly cleans up resources
 - All callback functions properly handle errors
+- Removed unused `text` variables that caused ESLint errors in CI/CD
+- Fixed test mocks to properly simulate API response handling
+- Improved branch coverage to 90.96% (above 90% threshold)
 
 ### Security
 - ✅ No hardcoded secrets
@@ -77,11 +84,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ Edge case handling
 
 ### Maintainability
-- ✅ 99.76% code coverage
+- ✅ 99.21% code coverage (98% statements, 90.96% branches)
 - ✅ Comprehensive documentation
 - ✅ ESLint passing (0 errors, 0 warnings)
 - ✅ CI/CD configured (GitHub Actions)
 - ✅ Tests on Node.js 20.x, 22.x, 24.x
+- ✅ 139 tests covering all edge cases
 
 ## [2.1.0] - Previous Release
 

@@ -4,7 +4,7 @@
 
 **Last Updated:** 2025-01-27  
 **Version:** 2.2.0  
-**Coverage:** 99.76% (99.15% api.js, 100% index.js)
+**Coverage:** 99.21% (98% statements, 90.96% branches for api.js, 100% for index.js)
 
 ## Overview
 
@@ -219,7 +219,7 @@ homebridge-leviton/
 This refactoring addresses all concerns from the code evaluation:
 - ✅ All critical bugs fixed
 - ✅ Code quality significantly improved
-- ✅ Comprehensive test suite added (122 tests, 99.76% coverage)
+- ✅ Comprehensive test suite added (139 tests, 99.21% coverage, 90.96% branches)
 - ✅ Full JSDoc documentation
 - ✅ Updated README with comprehensive docs
 - ✅ Homebridge v2.0 compatibility

@@ -16,7 +16,7 @@ Homebridge plugin for Leviton Decora Smart WiFi devices. This plugin allows you 
 - ✅ **Device Exclusion** - Exclude specific models or devices from HomeKit
 - ✅ **Configurable Logging** - Independent log levels for debugging
 - ✅ **Homebridge v2.0 Compatible** - Ready for Homebridge v2.0
-- ✅ **Production Ready** - Comprehensive testing (99.76% coverage), security audited, reliability tested
+- ✅ **Production Ready** - Comprehensive testing (99.21% coverage, 90.96% branches), security audited, reliability tested
 
 ## Supported Devices
 
@@ -237,7 +237,7 @@ Additional documentation is available in the [`docs/`](docs/) directory:
 npm test
 ```
 
-All 106 tests are currently passing with 96%+ code coverage.
+All 139 tests are currently passing with 99%+ code coverage.
 
 ### Running Tests with Coverage
 
@@ -248,10 +248,10 @@ npm test
 ```
 
 Coverage report shows:
-- **Statements**: 96.17%
-- **Branches**: 89.65%
-- **Functions**: 97.1%
-- **Lines**: 96.12%
+- **Statements**: 99.21% (98% for api.js, 100% for index.js)
+- **Branches**: 93.22% (90.96% for api.js, 95.07% for index.js)
+- **Functions**: 98.79% (96.77% for api.js, 100% for index.js)
+- **Lines**: 99.2% (97.97% for api.js, 100% for index.js)
 
 ## Contributing
 
