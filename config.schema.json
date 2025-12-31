@@ -30,7 +30,7 @@
       },
       "excludedSerials": {
         "type": "array",
-        "description": "List of models to be excluded",
+        "description": "List of serial numbers to be excluded",
         "items": {
           "type": "string"
         }
