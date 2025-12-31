@@ -32,7 +32,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.postPersonLogin({
@@ -66,6 +72,13 @@ describe('Leviton API', () => {
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify({ error: 'Unauthorized' }),
       })
 
       await expect(
@@ -83,7 +96,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.getPersonResidentialPermissions({
@@ -108,7 +127,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.getResidentialAccounts({
@@ -130,7 +155,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.getResidentialAccountsV2({
@@ -155,7 +186,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.getResidenceIotSwitches({
@@ -181,7 +218,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.getIotSwitch({
@@ -288,7 +331,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.putIotSwitch({
@@ -308,7 +357,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       const result = await Leviton.putIotSwitch({
@@ -616,17 +671,24 @@ describe('Leviton API', () => {
 
   describe('rate limiting', () => {
     beforeEach(() => {
-      // Clear rate limiter state
+      // Clear rate limiter state and reset fetch mocks
       if (Leviton._rateLimiter) {
         Leviton._rateLimiter.requests = []
       }
+      fetch.mockReset()
     })
 
     it('should rate limit API calls', async () => {
       // Mock successful responses
       fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ id: 'test' }),
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify({ id: 'test' }),
       })
 
       // Make a reasonable number of requests for testing
@@ -669,6 +731,92 @@ describe('Leviton API', () => {
         expect(limiter.requests.length).toBe(testLimit)
       }
     })
+
+    it('should test waitIfNeeded with expired requests', async () => {
+      if (Leviton._rateLimiter) {
+        const limiter = Leviton._rateLimiter
+        const originalMaxRequests = limiter.maxRequests
+        const originalWindowMs = limiter.windowMs
+        
+        limiter.maxRequests = 2
+        limiter.windowMs = 1000 // 1 second window
+        limiter.requests = []
+
+        // Fill up the rate limit
+        limiter.acquire()
+        limiter.acquire()
+
+        // Make oldest request expired (older than window, so waitTime <= 0)
+        // This tests the branch at line 67-69 (else branch when waitTime <= 0)
+        const expiredTimestamp = Date.now() - 2000 // 2 seconds ago (expired)
+        limiter.requests[0] = expiredTimestamp
+
+        // Test waitIfNeeded directly - it should remove expired request
+        // Since we're at limit (2 requests), waitIfNeeded will try to acquire, fail,
+        // then see expired request (waitTime <= 0), remove it, and retry acquire
+        await limiter.waitIfNeeded()
+
+        // After waitIfNeeded, the expired request should have been removed
+        // (it may have been replaced by a new request if acquire() succeeded)
+        expect(limiter.requests.length).toBeGreaterThanOrEqual(1)
+        expect(limiter.requests.length).toBeLessThanOrEqual(2)
+        // The expired timestamp should not be in the array anymore
+        expect(limiter.requests.includes(expiredTimestamp)).toBe(false)
+        
+        // Restore original values
+        limiter.maxRequests = originalMaxRequests
+        limiter.windowMs = originalWindowMs
+        limiter.requests = []
+      }
+    })
+
+    it('should test waitIfNeeded with empty requests array', async () => {
+      if (Leviton._rateLimiter) {
+        const limiter = Leviton._rateLimiter
+        limiter.requests = [] // Empty array - tests the else branch at line 71-73
+
+        // waitIfNeeded should return immediately when requests is empty
+        await limiter.waitIfNeeded()
+
+        // Should be able to acquire immediately
+        const canAcquire = limiter.acquire()
+        expect(canAcquire).toBe(true)
+      }
+    })
+
+    it('should test waitIfNeeded when waitTime > 0', async () => {
+      if (Leviton._rateLimiter) {
+        const limiter = Leviton._rateLimiter
+        const originalMaxRequests = limiter.maxRequests
+        const originalWindowMs = limiter.windowMs
+        
+        limiter.maxRequests = 1
+        limiter.windowMs = 100 // Very short window for testing
+        limiter.requests = []
+
+        // Fill up the rate limit
+        limiter.acquire()
+
+        // Add a recent request (not expired, but within window)
+        // waitTime = 100 - (Date.now() - (Date.now() - 50)) = 100 - 50 = 50 > 0
+        // This tests the branch at line 64-66 (when waitTime > 0)
+        limiter.requests[0] = Date.now() - 50 // 50ms ago (still within 100ms window)
+
+        // Test waitIfNeeded - it should wait because waitTime > 0
+        // The wait will be Math.min(50, 1000) = 50ms
+        const startTime = Date.now()
+        await limiter.waitIfNeeded()
+        const elapsed = Date.now() - startTime
+
+        // Should have waited at least a bit (allowing for timing variance)
+        expect(elapsed).toBeGreaterThanOrEqual(40) // At least 40ms
+        
+        // Restore original values
+        limiter.maxRequests = originalMaxRequests
+        limiter.windowMs = originalWindowMs
+        limiter.requests = []
+      }
+    })
   })
 
   describe('response caching', () => {
@@ -691,7 +839,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValue({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       // First call - should hit API
@@ -734,18 +888,27 @@ describe('Leviton API', () => {
         brightness: 0,
       }
 
+      const mockHeaders = {
+        get: jest.fn((header) => {
+          if (header === 'content-type') return 'application/json'
+          return null
+        }),
+      }
       fetch
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => mockGetResponse,
+          headers: mockHeaders,
+          text: async () => JSON.stringify(mockGetResponse),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => mockPutResponse,
+          headers: mockHeaders,
+          text: async () => JSON.stringify(mockPutResponse),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => mockGetResponse,
+          headers: mockHeaders,
+          text: async () => JSON.stringify(mockGetResponse),
         })
 
       // Get initial state (cached)
@@ -787,7 +950,13 @@ describe('Leviton API', () => {
 
       fetch.mockResolvedValue({
         ok: true,
-        json: async () => mockResponse,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => JSON.stringify(mockResponse),
       })
 
       // First call
@@ -824,6 +993,99 @@ describe('Leviton API', () => {
       })
 
       expect(fetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('should clear expired cache entries', () => {
+      if (Leviton._responseCache) {
+        const cache = Leviton._responseCache
+        cache.clear()
+
+        // Add an entry that's already expired
+        const expiredEntry = {
+          data: { id: 'test' },
+          timestamp: Date.now() - 3000, // 3 seconds ago (past TTL)
+        }
+        cache.cache.set('test-key', expiredEntry)
+
+        // Add a valid entry
+        const validEntry = {
+          data: { id: 'test2' },
+          timestamp: Date.now(), // Just now
+        }
+        cache.cache.set('test-key2', validEntry)
+
+        // Clear expired entries
+        cache.clearExpired()
+
+        // Expired entry should be removed
+        expect(cache.cache.has('test-key')).toBe(false)
+        // Valid entry should remain
+        expect(cache.cache.has('test-key2')).toBe(true)
+      }
+    })
+  })
+
+  describe('edge cases', () => {
+    it('should handle empty response body', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => '',
+      })
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('Empty response body')
+    })
+
+    it('should handle JSON parsing error without Unexpected token', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => '{ invalid json }',
+      })
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('Failed to parse JSON response')
+    })
+
+    it('should reject subscribe with login object missing id', () => {
+      expect(() => {
+        Leviton.subscribe({ userId: 'user-1' }, [{ id: 'device-1' }], jest.fn(), {
+          log: { debug: jest.fn(), error: jest.fn(), info: jest.fn() },
+        })
+      }).toThrow('login object must have an id property (token)')
+    })
+
+    it('should handle API request timeout with AbortController', async () => {
+      // Mock fetch to reject with AbortError (simulating timeout)
+      const abortError = new Error('The operation was aborted')
+      abortError.name = 'AbortError'
+      fetch.mockRejectedValueOnce(abortError)
+
+      await expect(
+        Leviton.getIotSwitch({
+          switchID: 'switch-1',
+          token: 'token-123',
+        })
+      ).rejects.toThrow('API request timeout after 10000ms')
     })
   })
 })

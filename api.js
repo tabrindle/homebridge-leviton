@@ -208,23 +208,22 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
 
     clearTimeout(timeoutId)
 
+    // Get response text first (can only be read once)
+    const responseText = await response.text()
+
     if (!response.ok) {
-      // Try to get response text for better error messages
+      // Try to provide better error messages
       let errorBody = ''
       try {
         const contentType = response.headers.get('content-type') || ''
         if (contentType.includes('text/html')) {
           // API returned HTML (likely an error page)
-          const text = await response.text()
-          errorBody = ` (received HTML instead of JSON)`
-        } else {
-          errorBody = await response.text()
-          if (errorBody.length > 200) {
-            errorBody = errorBody.substring(0, 200) + '...'
-          }
+          errorBody = ' (received HTML instead of JSON)'
+        } else if (responseText && responseText.length > 0) {
+          errorBody = responseText.length > 200 ? ` (${responseText.substring(0, 200)}...)` : ` (${responseText})`
         }
       } catch {
-        // Ignore errors when reading error response
+        // Ignore errors when processing error response
       }
       throw new Error(`API request failed: ${response.status} ${response.statusText}${errorBody}`)
     }
@@ -232,17 +231,25 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     // Check Content-Type before parsing JSON
     const contentType = response.headers.get('content-type') || ''
     if (!contentType.includes('application/json') && !contentType.includes('text/json')) {
-      const text = await response.text()
-      throw new Error(`API returned non-JSON response (Content-Type: ${contentType}). Response: ${text.substring(0, 200)}`)
+      // API returned non-JSON (likely HTML error page)
+      const preview = responseText.length > 200 ? responseText.substring(0, 200) + '...' : responseText
+      throw new Error(`API returned non-JSON response (Content-Type: ${contentType}). Response preview: ${preview}`)
     }
 
+    // Parse JSON with error handling
     let data
     try {
-      data = await response.json()
+      if (!responseText || responseText.trim().length === 0) {
+        throw new Error('Empty response body')
+      }
+      data = JSON.parse(responseText)
     } catch (jsonError) {
-      // Handle JSON parsing errors (e.g., when API returns HTML)
-      const text = await response.text()
-      throw new Error(`Failed to parse JSON response: ${jsonError.message}. Response body: ${text.substring(0, 200)}`)
+      // Handle JSON parsing errors (e.g., when API returns HTML despite Content-Type)
+      const preview = responseText.length > 200 ? responseText.substring(0, 200) + '...' : responseText
+      if (jsonError.message && jsonError.message.includes('Unexpected token')) {
+        throw new Error(`Failed to parse JSON response: received HTML or invalid JSON. Response preview: ${preview}`)
+      }
+      throw new Error(`Failed to parse JSON response: ${jsonError.message}. Response preview: ${preview}`)
     }
 
     // Cache response if enabled
