@@ -1207,7 +1207,8 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
       challengeReceived = true
       // Send token from login object (may be updated on re-auth)
       scope.log.debug(`Received challenge, responding with token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}`)
-      const response = [JSON.stringify({ token: login.id })]
+      const response = JSON.stringify({ token: login.id })
+      scope.log.debug(`Sending auth response: ${response.substring(0, 50)}...`)
       ws.send(response)
       authResponseSent = true
       return
