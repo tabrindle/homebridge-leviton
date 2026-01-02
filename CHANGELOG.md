@@ -5,6 +5,17 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.11] - 2026-01-01
+
+### Changed
+- **Cleaner WebSocket Logging**: Consolidated verbose WebSocket disconnect messages
+  - Token expiry now shows single line: "Real-time updates stopped (token expired). Restart Homebridge to restore. Device control still works."
+  - Reconnection attempts: "WebSocket reconnecting in 4s... (2/10)"
+  - Full event JSON moved to debug level only
+  - Max retries: "Real-time updates unavailable after 10 retries. Device control still works."
+
+---
+
 ## [3.0.10] - 2026-01-01
 
 ### Changed

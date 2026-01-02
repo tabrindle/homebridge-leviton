@@ -1129,6 +1129,7 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
 
     const wasClean = ev && ev.wasClean
     const code = ev && ev.code
+    const reason = ev && ev.reason
 
     if (wasClean && code === 1000) {
       // Normal closure - don't reconnect
@@ -1136,7 +1137,15 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
       return
     }
 
-    scope.log.error(`Socket connection closed: ${JSON.stringify(ev)}`)
+    // Log full event details at debug level only
+    scope.log.debug(`WebSocket closed: ${JSON.stringify(ev)}`)
+
+    // On 401 Unauthorized, don't attempt to reconnect
+    // The SockJS session is tied to the original login; re-auth doesn't restore it
+    if (code === 401) {
+      scope.log.warn('Real-time updates stopped (token expired). Restart Homebridge to restore. Device control still works.')
+      return
+    }
 
     // Attempt reconnection with exponential backoff
     if (reconnectAttempt < WS_RECONNECT_MAX_ATTEMPTS) {
@@ -1145,17 +1154,7 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
         WS_RECONNECT_MAX_DELAY
       )
 
-      // On 401 Unauthorized, don't attempt to reconnect
-      // The SockJS session is tied to the original login; re-auth doesn't restore it
-      // User should restart Homebridge to fully re-establish the connection
-      if (code === 401) {
-        scope.log.warn('WebSocket authentication failed (401). Token may have expired.')
-        scope.log.warn('Real-time updates disabled. Restart Homebridge to restore WebSocket connection.')
-        scope.log.info('Note: Device control via HomeKit will continue to work (uses REST API).')
-        return
-      }
-
-      scope.log.info(`Attempting to reconnect WebSocket in ${delay}ms (attempt ${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
+      scope.log.info(`WebSocket reconnecting in ${Math.round(delay/1000)}s... (${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
 
       reconnectTimeout = setTimeout(() => {
         try {
@@ -1165,7 +1164,7 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
         }
       }, delay)
     } else {
-      scope.log.error(`WebSocket reconnection failed after ${WS_RECONNECT_MAX_ATTEMPTS} attempts`)
+      scope.log.warn(`Real-time updates unavailable after ${WS_RECONNECT_MAX_ATTEMPTS} retries. Device control still works.`)
     }
   }
 
