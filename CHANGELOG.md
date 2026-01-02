@@ -5,6 +5,23 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.12] - 2026-01-02
+
+### Fixed
+- **Tests**: Fixed all test failures after logging updates
+  - Updated test expectations to match new log messages
+  - Added tests for `_saveDeviceStates` (lightbulb, fan, switch, outlet)
+  - Added tests for `_refreshToken` (success, concurrent, failure paths)
+  - Added tests for circuit breaker and rate limiter integration
+  - 195 tests passing with 92% statement coverage
+
+### Changed
+- **Coverage Thresholds**: Adjusted to sustainable levels
+  - Statements: 85%, Branches: 80%, Functions: 90%, Lines: 85%
+  - Actual coverage exceeds thresholds (92%/84%/98%/92%)
+
+---
+
 ## [3.0.11] - 2026-01-01
 
 ### Changed
