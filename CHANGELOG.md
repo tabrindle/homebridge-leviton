@@ -5,6 +5,18 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.5] - 2026-01-01
+
+### Fixed
+- **CRITICAL: Handler closure fix**: Replaced `.bind(this)` with `const self = this`
+  - The `.bind(this)` pattern was not reliable for async handler functions
+  - Using lexical `self` capture ensures `this` is always correctly referenced
+  - Added comprehensive error handling with top-level try-catch
+  - Added debug logging at handler entry points for troubleshooting
+  - Removed redundant `.bind(this)` from service registration calls
+
+---
+
 ## [3.0.4] - 2026-01-01
 
 ### Fixed
