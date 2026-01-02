@@ -19,7 +19,8 @@ const DEFAULT_HEADERS = {
 }
 
 // Rate limiting configuration
-const RATE_LIMIT_MAX_REQUESTS = 60 // Maximum requests per window
+// Increased to handle startup burst when HomeKit queries all devices at once
+const RATE_LIMIT_MAX_REQUESTS = 200 // Maximum requests per window (was 60)
 const RATE_LIMIT_WINDOW_MS = 60000 // 1 minute window
 
 // API response cache configuration
@@ -557,6 +558,10 @@ const devicePersistence = new DevicePersistence()
 // Global response cache instance
 const responseCache = new ResponseCache()
 
+// In-flight request deduplication map
+// Prevents duplicate concurrent requests for the same resource
+const inFlightRequests = new Map()
+
 // WebSocket message types
 const WS_MESSAGE_TYPES = {
   CHALLENGE: 'challenge',
@@ -593,6 +598,7 @@ function toQueryString(params) {
 async function apiRequest(url, options = {}, cacheOptions = {}) {
   const { useCache = false, cacheKey = url, bypassCircuitBreaker = false, debugLog } = cacheOptions
   const log = debugLog || (() => {})
+  const dedupeKey = `${options.method || 'GET'}:${url}`
 
   log(`[apiRequest] START method=${options.method || 'GET'} url=${url}`)
 
@@ -605,6 +611,19 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     }
     log(`[apiRequest] CACHE MISS for ${cacheKey}`)
   }
+  
+  // Request deduplication: if same request is already in-flight, wait for it
+  if (useCache && inFlightRequests.has(dedupeKey)) {
+    log(`[apiRequest] IN-FLIGHT REQUEST found for ${dedupeKey}, waiting...`)
+    try {
+      const result = await inFlightRequests.get(dedupeKey)
+      log(`[apiRequest] IN-FLIGHT REQUEST completed, returning result`)
+      return result
+    } catch (err) {
+      log(`[apiRequest] IN-FLIGHT REQUEST failed: ${err.message}`)
+      throw err
+    }
+  }
 
   // Check circuit breaker (unless bypassed for critical requests like login)
   if (!bypassCircuitBreaker && !circuitBreaker.canRequest()) {
@@ -614,41 +633,49 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     throw new Error(`Circuit breaker is OPEN. Service unavailable. Retry in ${Math.ceil(waitTime / 1000)}s`)
   }
 
-  // Rate limiting: wait if needed
-  await rateLimiter.waitIfNeeded()
+  // Rate limiting: check if we can proceed (non-blocking for better HomeKit responsiveness)
+  log(`[apiRequest] checking rate limiter...`)
+  const canProceed = rateLimiter.acquire()
+  if (!canProceed) {
+    log(`[apiRequest] RATE LIMITED - too many requests, failing fast`)
+    throw new Error('Rate limited - too many concurrent requests. Try again shortly.')
+  }
+  log(`[apiRequest] rate limiter OK, proceeding`)
 
   // Track half-open request if applicable
   if (!bypassCircuitBreaker && circuitBreaker.state === CircuitState.HALF_OPEN) {
     circuitBreaker.trackHalfOpenRequest()
   }
 
-  // Create AbortController for timeout
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => {
-    controller.abort()
-  }, API_REQUEST_TIMEOUT_MS)
+  // Create the actual fetch promise and track it for deduplication
+  const fetchPromise = (async () => {
+    // Create AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+    }, API_REQUEST_TIMEOUT_MS)
 
-  const requestHeaders = {
-    ...DEFAULT_HEADERS,
-    ...options.headers,
-  }
-  
-  log(`[apiRequest] FETCHING headers=${JSON.stringify(Object.keys(requestHeaders))} body=${options.body ? options.body.substring(0, 100) : 'none'}`)
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: requestHeaders,
-    })
-
-    clearTimeout(timeoutId)
+    const requestHeaders = {
+      ...DEFAULT_HEADERS,
+      ...options.headers,
+    }
     
-    log(`[apiRequest] RESPONSE status=${response.status} statusText=${response.statusText}`)
+    log(`[apiRequest] FETCHING headers=${JSON.stringify(Object.keys(requestHeaders))} body=${options.body ? options.body.substring(0, 100) : 'none'}`)
 
-    // Get response text first (can only be read once)
-    const responseText = await response.text()
-    log(`[apiRequest] RESPONSE BODY (first 500 chars): ${responseText.substring(0, 500)}`)
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: requestHeaders,
+      })
+
+      clearTimeout(timeoutId)
+      
+      log(`[apiRequest] RESPONSE status=${response.status} statusText=${response.statusText}`)
+
+      // Get response text first (can only be read once)
+      const responseText = await response.text()
+      log(`[apiRequest] RESPONSE BODY (first 500 chars): ${responseText.substring(0, 500)}`)
 
     if (!response.ok) {
       // Try to provide better error messages
@@ -714,45 +741,61 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
       circuitBreaker.recordSuccess()
     }
 
-    // Cache response if enabled
-    if (useCache) {
-      responseCache.set(cacheKey, data)
-    }
+      // Cache response if enabled
+      if (useCache) {
+        responseCache.set(cacheKey, data)
+      }
 
-    return data
-  } catch (error) {
-    clearTimeout(timeoutId)
+      return data
+    } catch (error) {
+      clearTimeout(timeoutId)
 
-    // Handle timeout/abort errors
-    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      // Timeouts indicate service issues - record for circuit breaker
+      // Handle timeout/abort errors
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        // Timeouts indicate service issues - record for circuit breaker
+        if (!bypassCircuitBreaker) {
+          circuitBreaker.recordFailure()
+        }
+        throw new Error(`API request timeout after ${API_REQUEST_TIMEOUT_MS}ms`)
+      }
+
+      // Re-throw circuit breaker errors as-is
+      if (error.message && error.message.includes('Circuit breaker')) {
+        throw error
+      }
+
+      // Re-throw API errors as-is (they already have good context)
+      if (error.message && (
+        error.message.includes('API request failed') ||
+        error.message.includes('Failed to parse JSON') ||
+        error.message.includes('API returned non-JSON')
+      )) {
+        throw error
+      }
+      
+      // Network errors indicate service issues
       if (!bypassCircuitBreaker) {
         circuitBreaker.recordFailure()
       }
-      throw new Error(`API request timeout after ${API_REQUEST_TIMEOUT_MS}ms`)
+      
+      // Wrap network errors with more context
+      throw new Error(`Network error: ${error.message}`)
     }
-
-    // Re-throw circuit breaker errors as-is
-    if (error.message && error.message.includes('Circuit breaker')) {
-      throw error
+  })()
+  
+  // Track in-flight request for deduplication (only for cacheable requests)
+  if (useCache) {
+    inFlightRequests.set(dedupeKey, fetchPromise)
+  }
+  
+  try {
+    const result = await fetchPromise
+    return result
+  } finally {
+    // Clean up in-flight tracking
+    if (useCache) {
+      inFlightRequests.delete(dedupeKey)
     }
-
-    // Re-throw API errors as-is (they already have good context)
-    if (error.message && (
-      error.message.includes('API request failed') ||
-      error.message.includes('Failed to parse JSON') ||
-      error.message.includes('API returned non-JSON')
-    )) {
-      throw error
-    }
-    
-    // Network errors indicate service issues
-    if (!bypassCircuitBreaker) {
-      circuitBreaker.recordFailure()
-    }
-    
-    // Wrap network errors with more context
-    throw new Error(`Network error: ${error.message}`)
   }
 }
 

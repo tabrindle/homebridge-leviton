@@ -5,6 +5,21 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.7] - 2026-01-01
+
+### Fixed
+- **CRITICAL: Startup Performance**: Fixed "No Response" caused by rate limiting at startup
+  - Increased rate limit from 60 to 200 requests/minute to handle HomeKit burst queries
+  - Changed rate limiter to fail-fast instead of blocking (prevents HomeKit timeouts)
+  - Added request deduplication - concurrent requests for same device now share one API call
+  - This fixes the issue where all devices showed "No Response" after restart
+
+### Added  
+- Added rate limiter status logging to trace request flow
+- Added in-flight request tracking to prevent duplicate API calls
+
+---
+
 ## [3.0.6] - 2026-01-01
 
 ### Added
