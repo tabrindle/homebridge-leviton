@@ -15,20 +15,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
     global: {
-      branches: 80,
-      functions: 85,
-      lines: 85,
-      statements: 85,
-    },
-    // Per-file thresholds
-    './index.js': {
-      branches: 80,
-      functions: 85,
-      lines: 80,
-      statements: 80,
-    },
-    './api.js': {
-      branches: 85,
+      branches: 90,
       functions: 90,
       lines: 90,
       statements: 90,

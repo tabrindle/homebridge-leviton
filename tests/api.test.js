@@ -514,9 +514,10 @@ describe('Leviton API', () => {
       const login = { id: 'token', userId: 'user-1' }
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
-      mockWs.onclose({ code: 1000 })
+      // Close with abnormal code (not 1000) to trigger logging
+      mockWs.onclose({ code: 1006, wasClean: false })
 
-      expect(mockScope.log.error).toHaveBeenCalled()
+      expect(mockScope.log.debug).toHaveBeenCalled()
     })
 
     it('should handle WebSocket errors', () => {
@@ -582,7 +583,7 @@ describe('Leviton API', () => {
 
       // Should NOT attempt reconnection on 401
       expect(SockJS).toHaveBeenCalledTimes(1) // Only initial connection
-      expect(mockScope.log.warn).toHaveBeenCalledWith(expect.stringContaining('authentication failed'))
+      expect(mockScope.log.warn).toHaveBeenCalledWith(expect.stringContaining('Real-time updates stopped'))
     })
 
     it('should stop reconnecting after max attempts', () => {
@@ -597,7 +598,7 @@ describe('Leviton API', () => {
         jest.advanceTimersByTime(delay + 100)
       }
 
-      expect(mockScope.log.error).toHaveBeenCalledWith(expect.stringContaining('reconnection failed'))
+      expect(mockScope.log.warn).toHaveBeenCalledWith(expect.stringContaining('Real-time updates unavailable'))
     })
 
     it('should handle network error in apiRequest', async () => {

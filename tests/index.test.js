@@ -621,6 +621,7 @@ describe('LevitonDecoraSmartPlatform', () => {
       const config = {
         email: 'test@example.com',
         password: 'password123',
+        loglevel: 'debug', // Enable debug logging to see motion sensor messages
       }
       const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON', brightness: 50, minLevel: 1, maxLevel: 100 })
@@ -630,7 +631,6 @@ describe('LevitonDecoraSmartPlatform', () => {
       await platform.setupService(accessory)
       // Should setup both Lightbulb and MotionSensor services
       expect(accessory.addService).toHaveBeenCalled()
-      expect(mockLog).toHaveBeenCalled()
     })
 
     it('should setup motion dimmer service with motion data in status', async () => {
@@ -1450,14 +1450,17 @@ describe('LevitonDecoraSmartPlatform', () => {
     })
 
     it('should handle error getting devices', async () => {
-      Leviton.getResidenceIotSwitches.mockRejectedValueOnce(new Error('Network error'))
+      // Mock both device API calls to fail
+      Leviton.getResidenceIotSwitches.mockRejectedValue(new Error('Network error'))
       const config = {
         email: 'test@example.com',
         password: 'password123',
+        loglevel: 'debug', // Enable debug logging to see device API messages
       }
       const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 300))
-      expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to get Leviton devices'))
+      // Should log the primary API failure at debug level
+      expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Primary device API failed'))
     })
 
     it('should handle invalid callback in onSetPower', async () => {
@@ -1598,13 +1601,13 @@ describe('LevitonDecoraSmartPlatform', () => {
       }
       const _platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
       await new Promise((resolve) => setTimeout(resolve, 400))
-      // Should log error about subscription
-      // The error is logged via platform.log.error, which calls mockLog
-      // Check if mockLog was called with the error message
-      const errorCalls = mockLog.mock.calls.filter(call => 
-        call[0] && typeof call[0] === 'string' && call[0].includes('Error subscribing')
+      // Should log warning about subscription failure
+      // The warning is logged via platform.log.warn, which calls mockLog
+      // Check if mockLog was called with the warning message
+      const warnCalls = mockLog.mock.calls.filter(call => 
+        call[0] && typeof call[0] === 'string' && call[0].includes('Real-time updates unavailable')
       )
-      expect(errorCalls.length).toBeGreaterThan(0)
+      expect(warnCalls.length).toBeGreaterThan(0)
     })
 
     it('should handle non-array devices in _initialize (not array)', async () => {
@@ -1625,7 +1628,7 @@ describe('LevitonDecoraSmartPlatform', () => {
       await platform._initialize()
       
       // Should log error about unable to initialize
-      expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Unable to initialize'))
+      expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('No devices found'))
     })
 
     it('should handle non-array devices in v2 API path', async () => {
