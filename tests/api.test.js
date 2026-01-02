@@ -704,7 +704,7 @@ describe('Leviton API', () => {
 
       mockWs.onopen()
 
-      expect(mockScope.log.debug).toHaveBeenCalledWith('Socket connection opened')
+      expect(mockScope.log.debug).toHaveBeenCalledWith(expect.stringContaining('Socket connection opened'))
     })
 
     it('should not reconnect on normal WebSocket close', () => {

@@ -1032,7 +1032,7 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
               // Update login object with new token
               login.id = newLogin.id
               login.userId = newLogin.userId
-              scope.log.info('Re-authentication successful, reconnecting WebSocket...')
+              scope.log.info(`Re-authentication successful (token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}), reconnecting WebSocket...`)
             } catch (authError) {
               scope.log.error(`Re-authentication failed: ${authError.message}`)
               // Continue with old token anyway, will fail but count as attempt
@@ -1051,7 +1051,7 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
   ws.onopen = function onopen() {
     clearTimeout(connectionTimeout)
     isOpen = true
-    scope.log.debug('Socket connection opened')
+    scope.log.debug(`Socket connection opened (using token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'})`)
   }
 
   ws.onerror = function onerror(error) {
@@ -1076,6 +1076,7 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
     // Handle challenge message
     if (data.type === WS_MESSAGE_TYPES.CHALLENGE) {
       // Send token from login object (may be updated on re-auth)
+      scope.log.debug(`Received challenge, responding with token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}`)
       const response = [JSON.stringify({ token: login.id })]
       ws.send(response)
       return
