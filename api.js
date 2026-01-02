@@ -1032,6 +1032,19 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
               // Update login object with new token
               login.id = newLogin.id
               login.userId = newLogin.userId
+              
+              // "Warm up" the token with a REST API call before WebSocket
+              // The original flow makes API calls after login before WebSocket
+              try {
+                await getPersonResidentialPermissions({
+                  personID: newLogin.userId,
+                  token: newLogin.id,
+                })
+                scope.log.debug('Token validated with REST API')
+              } catch (warmupError) {
+                scope.log.debug(`Token warmup call failed (non-fatal): ${warmupError.message}`)
+              }
+              
               scope.log.info(`Re-authentication successful (token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}), reconnecting WebSocket...`)
             } catch (authError) {
               scope.log.error(`Re-authentication failed: ${authError.message}`)
