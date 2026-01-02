@@ -389,6 +389,55 @@ Output format:
 | Rate limiting | Reduce polling, check for loops |
 | Circuit breaker open | API may be down, wait for reset |
 
+## Pre-Release Testing
+
+### Install from GitHub (before npm publish)
+
+```bash
+# Install directly from GitHub
+sudo npm install -g github:tbaur/homebridge-leviton
+
+# Or specific branch/commit
+sudo npm install -g github:tbaur/homebridge-leviton#master
+```
+
+### Install from Local Clone
+
+```bash
+cd /tmp
+git clone https://github.com/tbaur/homebridge-leviton.git
+cd homebridge-leviton
+sudo npm install -g .
+```
+
+### Validation Checklist
+
+Before restart:
+```bash
+# Backup config
+cp ~/.homebridge/config.json ~/.homebridge/config.json.backup
+```
+
+After restart, verify:
+
+| Check | How |
+|-------|-----|
+| Plugin loads | Look for "LevitonDecoraSmart" in logs |
+| Devices discovered | Device names appear in logs |
+| Accessories persist | Same devices in Home app, same rooms |
+| Controls work | Toggle a light on/off |
+| WebSocket connects | "Socket" messages in debug logs |
+
+### Rollback
+
+```bash
+# Uninstall GitHub version
+sudo npm uninstall -g homebridge-leviton
+
+# Reinstall stable npm version
+sudo npm install -g homebridge-leviton@2.0.1
+```
+
 ## CI/CD
 
 ### GitHub Actions
@@ -404,7 +453,8 @@ Output format:
 1. Update `CHANGELOG.md`
 2. Bump version in `package.json`
 3. Commit and push
-4. npm publish (manual)
+4. `npm publish` (manual)
+5. Create GitHub release with tag
 
 ## Dependencies
 
