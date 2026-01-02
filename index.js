@@ -294,28 +294,34 @@ class LevitonDecoraSmartPlatform {
 
     this.log.debug(`Socket: ${accessory.displayName} (${id}): ${power} ${brightness ? `${brightness}%` : ''}`)
 
-    const service =
-      accessory.getService(Service.Fan) ||
-      accessory.getService(Service.Switch) ||
-      accessory.getService(Service.Outlet) ||
-      accessory.getService(Service.Lightbulb)
+    // Get services - check specific types
+    const fanService = accessory.getService(Service.Fan)
+    const lightService = accessory.getService(Service.Lightbulb)
+    const switchService = accessory.getService(Service.Switch)
+    const outletService = accessory.getService(Service.Outlet)
 
-    if (!service) {
+    const primaryService = fanService || lightService || switchService || outletService
+
+    if (!primaryService) {
       this.log.warn(`No service found for accessory: ${accessory.displayName}`)
       return
     }
 
-    const isFan = !!accessory.getService(Service.Fan)
-
-    // Update brightness/rotation speed if provided
+    // Update brightness/rotation speed if provided (only on services that support it)
     if (brightness !== undefined && brightness !== null) {
-      const characteristic = isFan ? Characteristic.RotationSpeed : Characteristic.Brightness
-      service.getCharacteristic(characteristic).updateValue(brightness)
+      if (fanService) {
+        // Fan uses RotationSpeed
+        fanService.getCharacteristic(Characteristic.RotationSpeed).updateValue(brightness)
+      } else if (lightService) {
+        // Lightbulb uses Brightness
+        lightService.getCharacteristic(Characteristic.Brightness).updateValue(brightness)
+      }
+      // Switch and Outlet don't support brightness - ignore
     }
 
     // Update power state
     if (power !== undefined) {
-      service.getCharacteristic(Characteristic.On).updateValue(power === POWER_ON)
+      primaryService.getCharacteristic(Characteristic.On).updateValue(power === POWER_ON)
     }
 
     // Update motion sensor if present (for motion/occupancy dimmers)
@@ -747,8 +753,43 @@ class LevitonDecoraSmartPlatform {
    */
   async configureAccessory(accessory) {
     this.log.debug(`configureAccessory: ${accessory.displayName}`)
+    
+    // Clean up stale services from previous versions
+    this._cleanupStaleServices(accessory)
+    
     await this.setupService(accessory)
     this.accessories.push(accessory)
+  }
+
+  /**
+   * Removes stale/incorrect services from cached accessories
+   * @private
+   * @param {Object} accessory - Platform accessory
+   */
+  _cleanupStaleServices(accessory) {
+    const device = accessory.context && accessory.context.device
+    if (!device || !device.model) return
+
+    // Determine what service type this device SHOULD have
+    const isFan = device.model === DEVICE_MODELS.FAN
+    const isDimmer = DIMMER_MODELS.includes(device.model) || MOTION_DIMMER_MODELS.includes(device.model)
+    const isOutlet = OUTLET_MODELS.includes(device.model)
+
+    // Remove services that don't match the device type
+    const servicesToCheck = [
+      { type: Service.Fan, shouldHave: isFan },
+      { type: Service.Lightbulb, shouldHave: isDimmer },
+      { type: Service.Outlet, shouldHave: isOutlet },
+      { type: Service.Switch, shouldHave: !isFan && !isDimmer && !isOutlet },
+    ]
+
+    for (const { type, shouldHave } of servicesToCheck) {
+      const existingService = accessory.getService(type)
+      if (existingService && !shouldHave) {
+        this.log.debug(`Removing stale ${type} service from ${accessory.displayName}`)
+        accessory.removeService(existingService)
+      }
+    }
   }
 
   /**
