@@ -5,6 +5,23 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.13] - 2026-01-02
+
+### Changed
+- **WebSocket Real-time Updates**: Graceful handling of WebSocket auth changes
+  - Leviton's WebSocket authentication protocol has changed and is no longer compatible
+  - Real-time updates are now disabled with a calm info message (not an error)
+  - Device control continues to work normally via REST API
+  - Status updates occur when HomeKit queries devices (polling behavior)
+  - Message: "Real-time updates unavailable (WebSocket auth not supported). Device control works normally."
+
+### Fixed
+- **False "Token Expired" Warning**: No longer shows alarming warning on every restart
+  - The 401 from WebSocket is now handled gracefully as an expected condition
+  - Debug logging available for troubleshooting if needed
+
+---
+
 ## [3.0.12] - 2026-01-02
 
 ### Fixed

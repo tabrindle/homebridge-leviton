@@ -24,6 +24,7 @@ module.exports = {
   collectCoverageFrom: [
     '*.js',
     '!jest.config.js',
+    '!test-websocket.js',
     '!tests/**',
     '!coverage/**',
   ],

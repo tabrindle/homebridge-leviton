@@ -1141,12 +1141,16 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
     // Log full event details at debug level only
     scope.log.debug(`WebSocket closed: ${JSON.stringify(ev)}`)
 
-    // On 401 Unauthorized after successful connection, don't attempt to reconnect
-    // The SockJS session is tied to the original login; re-auth doesn't restore it
-    if (code === 401 && isOpen) {
-      // Log diagnostic info to help debug persistent 401 issues
+    // On 401 Unauthorized, don't attempt to reconnect - WebSocket auth may be unsupported
+    if (code === 401) {
+      // Log diagnostic info at debug level
       scope.log.debug(`WebSocket auth failed - challengeReceived: ${challengeReceived}, authResponseSent: ${authResponseSent}`)
-      scope.log.warn('Real-time updates stopped (token expired). Restart Homebridge to restore. Device control still works.')
+      // Only show warning once, and make it clear this is expected behavior
+      if (isOpen) {
+        scope.log.info('Real-time updates unavailable (WebSocket auth not supported). Device control works normally.')
+      } else {
+        scope.log.debug('WebSocket connection rejected (401). Real-time updates disabled.')
+      }
       return
     }
 

@@ -458,16 +458,17 @@ describe('Leviton API', () => {
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
       const challengeMessage = {
-        data: JSON.stringify({ type: 'challenge' }),
+        data: JSON.stringify({ type: 'challenge', nonce: 'test-nonce' }),
       }
 
       mockWs.onmessage(challengeMessage)
 
       expect(mockWs.send).toHaveBeenCalled()
-      // Verify token string is sent, not full login object
+      // Verify token and userId are sent as JSON string
       const sendCall = mockWs.send.mock.calls[0][0]
-      const sentData = JSON.parse(sendCall[0])
+      const sentData = JSON.parse(sendCall)
       expect(sentData.token).toBe('token')
+      expect(sentData.userId).toBe('user-1')
     })
 
     it('should handle ready status and subscribe to devices', () => {
@@ -584,30 +585,29 @@ describe('Leviton API', () => {
       // First, simulate successful connection
       mockWs.onopen()
 
-      // Then close with 401 Unauthorized (token expired mid-session)
+      // Then close with 401 Unauthorized (WebSocket auth not supported)
       mockWs.onclose({ code: 401, wasClean: true, reason: 'Unauthorized' })
 
-      // Should NOT attempt reconnection on 401 after connection was established
+      // Should NOT attempt reconnection on 401
       expect(SockJS).toHaveBeenCalledTimes(1) // Only initial connection
-      expect(mockScope.log.warn).toHaveBeenCalledWith(expect.stringContaining('Real-time updates stopped'))
+      expect(mockScope.log.info).toHaveBeenCalledWith(expect.stringContaining('Real-time updates unavailable'))
     })
 
-    it('should retry on 401 if connection was never established', () => {
+    it('should not reconnect on 401 even if connection was never established', () => {
       const login = { id: 'token', userId: 'user-1' }
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
-      // Close with 401 BEFORE onopen (initial connection failed)
+      // Close with 401 BEFORE onopen (WebSocket auth not supported)
       mockWs.onclose({ code: 401, wasClean: false, reason: 'Unauthorized' })
 
-      // Should attempt reconnection since connection was never established
-      // (could be transient server issue, not actual token expiration)
-      expect(mockScope.log.debug).toHaveBeenCalledWith(expect.stringContaining('initial connection failed'))
+      // Should NOT attempt reconnection on 401 - WebSocket auth is not supported
+      expect(mockScope.log.debug).toHaveBeenCalledWith(expect.stringContaining('WebSocket connection rejected'))
 
       // Fast-forward past initial delay
       jest.advanceTimersByTime(1001)
 
-      // Should have attempted reconnection
-      expect(SockJS).toHaveBeenCalledTimes(2)
+      // Should NOT have attempted reconnection (401 means don't retry)
+      expect(SockJS).toHaveBeenCalledTimes(1)
     })
 
     it('should stop reconnecting after max attempts', () => {
