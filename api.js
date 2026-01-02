@@ -19,9 +19,11 @@ const DEFAULT_HEADERS = {
 }
 
 // Rate limiting configuration
-// Effectively disabled - let Leviton API handle its own rate limiting (returns 429)
-// With 50+ devices × 2 queries each, we need to allow bursts at startup
-const RATE_LIMIT_MAX_REQUESTS = 1000 // Very high to allow startup burst
+// Leviton allows max 99 devices per residence, 20 residences per account
+// At startup: 99 devices × 2 queries (power + brightness) = 198 requests
+// Rate limiter only applies to WRITE operations (GET requests bypass it)
+// This protects against rapid-fire toggle commands, not status queries
+const RATE_LIMIT_MAX_REQUESTS = 300 // Sufficient for write operations
 const RATE_LIMIT_WINDOW_MS = 60000 // 1 minute window
 
 // API response cache configuration

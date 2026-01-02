@@ -8,11 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.0.8] - 2026-01-01
 
 ### Fixed
-- **Rate Limiter Removed for GET Requests**: Fixes bouncing/unresponsive issues with 50+ devices
+- **Rate Limiter Removed for GET Requests**: Fixes bouncing/unresponsive issues with large installations
+  - Leviton supports max 99 devices per residence (198 queries at startup)
   - Rate limiter now only applies to write operations (PUT/POST)
   - GET requests (status queries) are no longer rate limited internally
   - Leviton API handles its own rate limiting and returns 429 if hit
-  - This allows large installations (50+ devices) to work without self-imposed failures
+  - Write operations limited to 300/minute (more than sufficient)
 
 ---
 
