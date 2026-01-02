@@ -1017,40 +1017,20 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
         WS_RECONNECT_MAX_DELAY
       )
 
+      // On 401 Unauthorized, don't attempt to reconnect
+      // The SockJS session is tied to the original login; re-auth doesn't restore it
+      // User should restart Homebridge to fully re-establish the connection
+      if (code === 401) {
+        scope.log.warn('WebSocket authentication failed (401). Token may have expired.')
+        scope.log.warn('Real-time updates disabled. Restart Homebridge to restore WebSocket connection.')
+        scope.log.info('Note: Device control via HomeKit will continue to work (uses REST API).')
+        return
+      }
+
       scope.log.info(`Attempting to reconnect WebSocket in ${delay}ms (attempt ${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
 
-      reconnectTimeout = setTimeout(async () => {
+      reconnectTimeout = setTimeout(() => {
         try {
-          // On 401 Unauthorized, re-authenticate before reconnecting
-          if (code === 401 && scope.config && scope.config.email && scope.config.password) {
-            scope.log.info('Token expired, re-authenticating...')
-            try {
-              const newLogin = await postPersonLogin({
-                email: scope.config.email,
-                password: scope.config.password,
-              })
-              // Update login object with new token
-              login.id = newLogin.id
-              login.userId = newLogin.userId
-              
-              // "Warm up" the token with a REST API call before WebSocket
-              // The original flow makes API calls after login before WebSocket
-              try {
-                await getPersonResidentialPermissions({
-                  personID: newLogin.userId,
-                  token: newLogin.id,
-                })
-                scope.log.debug('Token validated with REST API')
-              } catch (warmupError) {
-                scope.log.debug(`Token warmup call failed (non-fatal): ${warmupError.message}`)
-              }
-              
-              scope.log.info(`Re-authentication successful (token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}), reconnecting WebSocket...`)
-            } catch (authError) {
-              scope.log.error(`Re-authentication failed: ${authError.message}`)
-              // Continue with old token anyway, will fail but count as attempt
-            }
-          }
           createWebSocketConnection(login, devices, callback, scope, reconnectAttempt + 1)
         } catch (error) {
           scope.log.error(`Failed to reconnect WebSocket: ${error.message}`)

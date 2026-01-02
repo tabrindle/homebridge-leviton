@@ -438,6 +438,7 @@ describe('Leviton API', () => {
           debug: jest.fn(),
           error: jest.fn(),
           info: jest.fn(),
+          warn: jest.fn(),
         },
       }
     })
@@ -572,86 +573,16 @@ describe('Leviton API', () => {
       expect(SockJS).toHaveBeenCalledTimes(2)
     })
 
-    it('should re-authenticate on 401 Unauthorized close', async () => {
-      // Setup scope with config for re-auth
-      const scopeWithConfig = {
-        log: {
-          debug: jest.fn(),
-          info: jest.fn(),
-          warn: jest.fn(),
-          error: jest.fn(),
-        },
-        config: {
-          email: 'test@example.com',
-          password: 'password123',
-        },
-      }
-
-      // Mock successful re-auth
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ id: 'new-token', userId: 'user-1' }),
-      })
-
-      const login = { id: 'old-token', userId: 'user-1' }
-      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, scopeWithConfig)
-
-      // Close with 401 Unauthorized
-      mockWs.onclose({ code: 401, wasClean: true, reason: 'Unauthorized' })
-
-      // Fast-forward past initial delay
-      await jest.advanceTimersByTimeAsync(1001)
-
-      // Should attempt re-authentication
-      expect(scopeWithConfig.log.info).toHaveBeenCalledWith('Token expired, re-authenticating...')
-    })
-
-    it('should handle re-authentication failure on 401', async () => {
-      const scopeWithConfig = {
-        log: {
-          debug: jest.fn(),
-          info: jest.fn(),
-          warn: jest.fn(),
-          error: jest.fn(),
-        },
-        config: {
-          email: 'test@example.com',
-          password: 'password123',
-        },
-      }
-
-      // Mock failed re-auth
-      fetch.mockRejectedValueOnce(new Error('Auth failed'))
-
-      const login = { id: 'old-token', userId: 'user-1' }
-      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, scopeWithConfig)
-
-      // Close with 401 Unauthorized
-      mockWs.onclose({ code: 401, wasClean: true, reason: 'Unauthorized' })
-
-      // Fast-forward past initial delay
-      await jest.advanceTimersByTimeAsync(1001)
-
-      // Should log re-auth failure
-      expect(scopeWithConfig.log.error).toHaveBeenCalledWith(expect.stringContaining('Re-authentication failed'))
-    })
-
-    it('should skip re-auth on 401 if no config credentials', async () => {
-      // Scope without config credentials
-      const login = { id: 'old-token', userId: 'user-1' }
+    it('should not reconnect on 401 Unauthorized', () => {
+      const login = { id: 'token', userId: 'user-1' }
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
       // Close with 401 Unauthorized
       mockWs.onclose({ code: 401, wasClean: true, reason: 'Unauthorized' })
 
-      // Fast-forward past initial delay
-      await jest.advanceTimersByTimeAsync(1001)
-
-      // Should not attempt re-auth (no config)
-      expect(mockScope.log.info).not.toHaveBeenCalledWith('Token expired, re-authenticating...')
-      // Should still attempt reconnect
-      expect(SockJS).toHaveBeenCalledTimes(2)
+      // Should NOT attempt reconnection on 401
+      expect(SockJS).toHaveBeenCalledTimes(1) // Only initial connection
+      expect(mockScope.log.warn).toHaveBeenCalledWith(expect.stringContaining('authentication failed'))
     })
 
     it('should stop reconnecting after max attempts', () => {
