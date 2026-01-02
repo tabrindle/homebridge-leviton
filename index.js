@@ -287,14 +287,24 @@ class LevitonDecoraSmartPlatform {
   }
 
   /**
-   * Gets a valid token, refreshing if needed
+   * Gets a valid token, ensuring login if not yet authenticated
    * @private
-   * @param {Object} accessory - Platform accessory
-   * @returns {Promise<string|null>} Valid token or null
+   * @returns {Promise<string>} Valid token
+   * @throws {Error} If unable to obtain a valid token
    */
-  async _getValidToken(accessory) {
-    // Use central token if available, otherwise fall back to accessory context
-    return this.currentToken || (accessory.context && accessory.context.token)
+  async _ensureValidToken() {
+    // If we already have a token, return it
+    if (this.currentToken) {
+      return this.currentToken
+    }
+    
+    // No token yet - need to login
+    this.log.debug('No token available, performing login...')
+    const newToken = await this._refreshToken()
+    if (!newToken) {
+      throw new Error('Unable to obtain authentication token')
+    }
+    return newToken
   }
 
   /**
@@ -548,9 +558,12 @@ class LevitonDecoraSmartPlatform {
       }
 
       try {
+        // Ensure we have a valid token before making requests
+        let token = await this._ensureValidToken()
+        
         let res
         try {
-          res = await makeRequest(this.currentToken)
+          res = await makeRequest(token)
         } catch (err) {
           // On 401, refresh token and retry once
           if (err.message && err.message.includes('401')) {
@@ -606,9 +619,12 @@ class LevitonDecoraSmartPlatform {
       }
 
       try {
+        // Ensure we have a valid token before making requests
+        let token = await this._ensureValidToken()
+        
         let res
         try {
-          res = await makeRequest(this.currentToken)
+          res = await makeRequest(token)
         } catch (err) {
           // On 401, refresh token and retry once
           if (err.message && err.message.includes('401')) {
@@ -657,9 +673,12 @@ class LevitonDecoraSmartPlatform {
       }
 
       try {
+        // Ensure we have a valid token before making requests
+        let token = await this._ensureValidToken()
+        
         let res
         try {
-          res = await makeRequest(this.currentToken)
+          res = await makeRequest(token)
         } catch (err) {
           if (err.message && err.message.includes('401')) {
             this.log.debug('Token expired, refreshing...')
@@ -718,9 +737,12 @@ class LevitonDecoraSmartPlatform {
       }
 
       try {
+        // Ensure we have a valid token before making requests
+        let token = await this._ensureValidToken()
+        
         let res
         try {
-          res = await makeRequest(this.currentToken)
+          res = await makeRequest(token)
         } catch (err) {
           if (err.message && err.message.includes('401')) {
             this.log.debug('Token expired, refreshing...')
@@ -767,9 +789,12 @@ class LevitonDecoraSmartPlatform {
       }
 
       try {
+        // Ensure we have a valid token before making requests
+        let token = await this._ensureValidToken()
+        
         let res
         try {
-          res = await makeRequest(this.currentToken)
+          res = await makeRequest(token)
         } catch (err) {
           if (err.message && err.message.includes('401')) {
             this.log.debug('Token expired, refreshing...')
@@ -828,9 +853,12 @@ class LevitonDecoraSmartPlatform {
       }
 
       try {
+        // Ensure we have a valid token before making requests
+        let token = await this._ensureValidToken()
+        
         let res
         try {
-          res = await makeRequest(this.currentToken)
+          res = await makeRequest(token)
         } catch (err) {
           if (err.message && err.message.includes('401')) {
             this.log.debug('Token expired, refreshing...')
