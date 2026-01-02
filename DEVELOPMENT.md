@@ -5,25 +5,25 @@ Developer documentation for homebridge-leviton.
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Homebridge                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              index.js (Platform)                     │    │
-│  │  • LevitonDecoraSmartPlatform class                 │    │
-│  │  • Device discovery & accessory management          │    │
-│  │  • HomeKit service setup (Lightbulb, Fan, etc.)     │    │
-│  │  • Characteristic handlers (get/set power, etc.)    │    │
-│  └──────────────────────┬──────────────────────────────┘    │
-│                         │                                    │
-│  ┌──────────────────────▼──────────────────────────────┐    │
-│  │                 api.js (API Client)                  │    │
-│  │  • Leviton cloud API interaction                    │    │
-│  │  • WebSocket real-time updates                      │    │
-│  │  • Rate limiting, caching, circuit breaker          │    │
-│  │  • Device state persistence                         │    │
-│  └──────────────────────┬──────────────────────────────┘    │
-│                         │                                    │
-└─────────────────────────┼────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                      Homebridge                           │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │              index.js (Platform)                    │  │
+│  │  • LevitonDecoraSmartPlatform class                 │  │
+│  │  • Device discovery & accessory management          │  │
+│  │  • HomeKit service setup (Lightbulb, Fan, etc.)     │  │
+│  │  • Characteristic handlers (get/set power, etc.)    │  │
+│  └──────────────────────┬──────────────────────────────┘  │
+│                         │                                 │
+│  ┌──────────────────────▼──────────────────────────────┐  │
+│  │                 api.js (API Client)                 │  │
+│  │  • Leviton cloud API interaction                    │  │
+│  │  • WebSocket real-time updates                      │  │
+│  │  • Rate limiting, caching, circuit breaker          │  │
+│  │  • Device state persistence                         │  │
+│  └──────────────────────┬──────────────────────────────┘  │
+│                         │                                 │
+└─────────────────────────┼─────────────────────────────────┘
                           │
               ┌───────────▼───────────┐
               │   my.leviton.com      │

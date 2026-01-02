@@ -1464,6 +1464,120 @@ describe('Leviton API', () => {
       // Reset circuit breaker for other tests
       Leviton._circuitBreaker.reset()
     })
+
+    it('should block requests when circuit breaker is open', async () => {
+      // Force circuit breaker to open
+      const cb = Leviton._circuitBreaker
+      for (let i = 0; i < 10; i++) {
+        cb.recordFailure()
+      }
+      expect(cb.state).toBe('OPEN')
+
+      await expect(
+        Leviton.getIotSwitch({ switchID: 'switch-1', token: 'token-123' })
+      ).rejects.toThrow('Circuit breaker is OPEN')
+
+      cb.reset()
+    })
+
+    it('should track half-open requests and increment success count', async () => {
+      const cb = Leviton._circuitBreaker
+      cb.reset()
+      
+      // Manually transition to HALF_OPEN
+      cb.state = 'HALF_OPEN'
+      cb.halfOpenRequests = 0
+      cb.successes = 0
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => '{"power": "ON"}',
+      })
+
+      await Leviton.getIotSwitch({ switchID: 'switch-half-open', token: 'token-123' })
+      
+      // Success in half-open should increment success count
+      expect(cb.successes).toBeGreaterThan(0)
+      cb.reset()
+    })
+    
+    it('should close circuit after enough successes in half-open', () => {
+      const cb = Leviton._circuitBreaker
+      cb.reset()
+      
+      // Set to half-open
+      cb.state = 'HALF_OPEN'
+      cb.successes = 0
+      
+      // Record enough successes to close
+      for (let i = 0; i < cb.halfOpenMax; i++) {
+        cb.recordSuccess()
+      }
+      
+      expect(cb.state).toBe('CLOSED')
+      cb.reset()
+    })
+  })
+
+  describe('rate limiter integration', () => {
+    beforeEach(() => {
+      // Reset rate limiter by clearing requests
+      if (Leviton._rateLimiter) {
+        Leviton._rateLimiter.requests = []
+      }
+      // Reset circuit breaker
+      if (Leviton._circuitBreaker) {
+        Leviton._circuitBreaker.reset()
+      }
+      // Clear response cache
+      if (Leviton._responseCache) {
+        Leviton._responseCache.clear()
+      }
+    })
+
+    it('should allow GET requests without rate limiting', async () => {
+      // Setup fetch mock for all requests
+      fetch.mockImplementation(async () => ({
+        ok: true,
+        status: 200,
+        headers: {
+          get: jest.fn((header) => {
+            if (header === 'content-type') return 'application/json'
+            return null
+          }),
+        },
+        text: async () => '{"power": "ON"}',
+      }))
+
+      // Make many sequential GET requests - should all succeed
+      for (let i = 0; i < 5; i++) {
+        const result = await Leviton.getIotSwitch({ switchID: `switch-rl-seq-${i}`, token: 'token-123' })
+        expect(result).toBeDefined()
+      }
+    })
+
+    it('should rate limit PUT requests when limit exceeded', async () => {
+      const rl = Leviton._rateLimiter
+      
+      // Fill up the rate limiter
+      for (let i = 0; i < rl.maxRequests; i++) {
+        rl.acquire()
+      }
+
+      await expect(
+        Leviton.putIotSwitch({ switchID: 'switch-1', token: 'token-123', power: 'ON' })
+      ).rejects.toThrow('Rate limited')
+
+      // Reset for other tests
+      rl.requests = []
+    })
   })
 })
 

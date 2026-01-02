@@ -1808,3 +1808,437 @@ describe('Module Registration', () => {
     )
   })
 })
+
+describe('_saveDeviceStates', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('should save device states for lightbulb accessories', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    // Setup a mock accessory with lightbulb service
+    const mockLightService = {
+      ...mockServiceInstance,
+      getCharacteristic: jest.fn().mockImplementation((char) => {
+        if (char === 'On') return { value: true }
+        if (char === 'Brightness') return { value: 75 }
+        return { value: null }
+      }),
+    }
+
+    const mockAccessoryWithLight = {
+      displayName: 'Test Light',
+      context: { device: { id: 'device-1', name: 'Test Light', model: 'DW6HD' } },
+      getService: jest.fn().mockImplementation((type) => {
+        if (type === 'Lightbulb') return mockLightService
+        return null
+      }),
+    }
+
+    platform.accessories.push(mockAccessoryWithLight)
+    platform.devicePersistence = {
+      updateDevice: jest.fn(),
+      save: jest.fn(),
+    }
+
+    platform._saveDeviceStates()
+
+    expect(platform.devicePersistence.updateDevice).toHaveBeenCalledWith('device-1', expect.objectContaining({
+      id: 'device-1',
+      brightness: 75,
+    }))
+    expect(platform.devicePersistence.save).toHaveBeenCalled()
+  })
+
+  it('should save device states for fan accessories', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const mockFanService = {
+      ...mockServiceInstance,
+      getCharacteristic: jest.fn().mockImplementation((char) => {
+        if (char === 'On') return { value: true }
+        if (char === 'RotationSpeed') return { value: 50 }
+        return { value: null }
+      }),
+    }
+
+    const mockAccessoryWithFan = {
+      displayName: 'Test Fan',
+      context: { device: { id: 'device-2', name: 'Test Fan', model: 'ZS4FC' } },
+      getService: jest.fn().mockImplementation((type) => {
+        if (type === 'Fan') return mockFanService
+        return null
+      }),
+    }
+
+    platform.accessories.push(mockAccessoryWithFan)
+    platform.devicePersistence = {
+      updateDevice: jest.fn(),
+      save: jest.fn(),
+    }
+
+    platform._saveDeviceStates()
+
+    expect(platform.devicePersistence.updateDevice).toHaveBeenCalledWith('device-2', expect.objectContaining({
+      id: 'device-2',
+      brightness: 50,
+    }))
+  })
+
+  it('should save device states for switch accessories', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const mockSwitchService = {
+      ...mockServiceInstance,
+      getCharacteristic: jest.fn().mockImplementation((char) => {
+        if (char === 'On') return { value: false }
+        return { value: null }
+      }),
+    }
+
+    const mockAccessoryWithSwitch = {
+      displayName: 'Test Switch',
+      context: { device: { id: 'device-3', name: 'Test Switch', model: 'DW15S' } },
+      getService: jest.fn().mockImplementation((type) => {
+        if (type === 'Switch') return mockSwitchService
+        return null
+      }),
+    }
+
+    platform.accessories.push(mockAccessoryWithSwitch)
+    platform.devicePersistence = {
+      updateDevice: jest.fn(),
+      save: jest.fn(),
+    }
+
+    platform._saveDeviceStates()
+
+    expect(platform.devicePersistence.updateDevice).toHaveBeenCalledWith('device-3', expect.objectContaining({
+      id: 'device-3',
+      power: 'OFF',
+    }))
+  })
+
+  it('should save device states for outlet accessories', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const mockOutletService = {
+      ...mockServiceInstance,
+      getCharacteristic: jest.fn().mockImplementation((char) => {
+        if (char === 'On') return { value: true }
+        return { value: null }
+      }),
+    }
+
+    const mockAccessoryWithOutlet = {
+      displayName: 'Test Outlet',
+      context: { device: { id: 'device-4', name: 'Test Outlet', model: 'DW15P' } },
+      getService: jest.fn().mockImplementation((type) => {
+        if (type === 'Outlet') return mockOutletService
+        return null
+      }),
+    }
+
+    platform.accessories.push(mockAccessoryWithOutlet)
+    platform.devicePersistence = {
+      updateDevice: jest.fn(),
+      save: jest.fn(),
+    }
+
+    platform._saveDeviceStates()
+
+    expect(platform.devicePersistence.updateDevice).toHaveBeenCalledWith('device-4', expect.objectContaining({
+      id: 'device-4',
+      power: 'ON',
+    }))
+  })
+
+  it('should skip accessories without context or device', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const accessoryNoContext = {
+      displayName: 'No Context',
+      getService: jest.fn(),
+    }
+
+    const accessoryNoDevice = {
+      displayName: 'No Device',
+      context: {},
+      getService: jest.fn(),
+    }
+
+    platform.accessories.push(accessoryNoContext)
+    platform.accessories.push(accessoryNoDevice)
+    platform.devicePersistence = {
+      updateDevice: jest.fn(),
+      save: jest.fn(),
+    }
+
+    platform._saveDeviceStates()
+
+    expect(platform.devicePersistence.updateDevice).not.toHaveBeenCalled()
+    expect(platform.devicePersistence.save).toHaveBeenCalled()
+  })
+
+  it('should skip accessories without recognized services', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const accessoryNoService = {
+      displayName: 'No Service',
+      context: { device: { id: 'device-5', name: 'Test', model: 'Unknown' } },
+      getService: jest.fn().mockReturnValue(null),
+    }
+
+    platform.accessories.push(accessoryNoService)
+    platform.devicePersistence = {
+      updateDevice: jest.fn(),
+      save: jest.fn(),
+    }
+
+    platform._saveDeviceStates()
+
+    expect(platform.devicePersistence.updateDevice).not.toHaveBeenCalled()
+  })
+
+  it('should handle errors during save gracefully', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    platform.devicePersistence = {
+      updateDevice: jest.fn().mockImplementation(() => { throw new Error('Save error') }),
+      save: jest.fn(),
+    }
+
+    const accessory = {
+      displayName: 'Test',
+      context: { device: { id: 'device-1', name: 'Test', model: 'DW6HD' } },
+      getService: jest.fn().mockReturnValue({
+        getCharacteristic: jest.fn().mockReturnValue({ value: true }),
+      }),
+    }
+    platform.accessories.push(accessory)
+
+    // Should not throw
+    expect(() => platform._saveDeviceStates()).not.toThrow()
+    expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Failed to save device states'))
+  })
+})
+
+describe('_refreshToken', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('should refresh token successfully', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    Leviton.postPersonLogin.mockResolvedValue({
+      id: 'new-token-123',
+      userId: 'user-123',
+    })
+
+    const token = await platform._refreshToken()
+
+    expect(token).toBe('new-token-123')
+    expect(platform.currentToken).toBe('new-token-123')
+  })
+
+  it('should wait when refresh is already in progress', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    platform.tokenRefreshInProgress = true
+    platform.currentToken = 'existing-token'
+
+    const startTime = Date.now()
+    const token = await platform._refreshToken()
+    const elapsed = Date.now() - startTime
+
+    expect(elapsed).toBeGreaterThanOrEqual(1900) // Should wait ~2s
+    expect(token).toBe('existing-token')
+  })
+
+  it('should return null when login response is missing id', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    Leviton.postPersonLogin.mockResolvedValue({})
+
+    const token = await platform._refreshToken()
+
+    expect(token).toBeNull()
+    expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("missing 'id' field"))
+  })
+
+  it('should return null and log error on exception', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    Leviton.postPersonLogin.mockRejectedValue(new Error('Auth failed'))
+
+    const token = await platform._refreshToken()
+
+    expect(token).toBeNull()
+    expect(mockLog).toHaveBeenCalledWith(expect.stringContaining('Token refresh failed'))
+  })
+
+  it('should update token in all accessory contexts', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const accessory1 = { context: { token: 'old-token' } }
+    const accessory2 = { context: { token: 'old-token' } }
+    platform.accessories.push(accessory1)
+    platform.accessories.push(accessory2)
+
+    Leviton.postPersonLogin.mockResolvedValue({
+      id: 'new-token-xyz',
+      userId: 'user-123',
+    })
+
+    await platform._refreshToken()
+
+    expect(accessory1.context.token).toBe('new-token-xyz')
+    expect(accessory2.context.token).toBe('new-token-xyz')
+  })
+
+  it('should reset tokenRefreshInProgress flag on success', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    Leviton.postPersonLogin.mockResolvedValue({
+      id: 'new-token',
+      userId: 'user-123',
+    })
+
+    await platform._refreshToken()
+
+    expect(platform.tokenRefreshInProgress).toBe(false)
+  })
+
+  it('should reset tokenRefreshInProgress flag on failure', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    Leviton.postPersonLogin.mockRejectedValue(new Error('Network error'))
+
+    await platform._refreshToken()
+
+    expect(platform.tokenRefreshInProgress).toBe(false)
+  })
+})
+
+describe('subscriptionCallback edge cases', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('should update motion sensor when MotionSensor service exists', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const motionService = {
+      getCharacteristic: jest.fn().mockReturnThis(),
+      updateValue: jest.fn().mockReturnThis(),
+    }
+
+    const lightService = {
+      getCharacteristic: jest.fn().mockReturnThis(),
+      updateValue: jest.fn().mockReturnThis(),
+    }
+
+    const mockMotionAccessory = {
+      displayName: 'Motion Dimmer',
+      context: { device: { id: 'device-motion' } },
+      getService: jest.fn().mockImplementation((type) => {
+        if (type === 'MotionSensor') return motionService
+        if (type === 'Lightbulb') return lightService
+        return null
+      }),
+    }
+
+    platform.accessories.push(mockMotionAccessory)
+
+    const deviceUpdate = { id: 'device-motion', power: 'ON', brightness: 100, occupancy: true }
+    platform.subscriptionCallback(deviceUpdate)
+
+    expect(lightService.updateValue).toHaveBeenCalled()
+  })
+
+  it('should handle device not found in accessories', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const deviceUpdate = { id: 'non-existent', power: 'ON' }
+    
+    // Should not throw
+    expect(() => platform.subscriptionCallback(deviceUpdate)).not.toThrow()
+  })
+
+  it('should handle device with no power update', async () => {
+    const platform = new LevitonDecoraSmartPlatform(mockLog, {
+      email: 'test@example.com',
+      password: 'password123',
+    }, mockApi)
+
+    const mockService = {
+      getCharacteristic: jest.fn().mockReturnThis(),
+      updateValue: jest.fn().mockReturnThis(),
+    }
+
+    const mockAccessory = {
+      displayName: 'Test',
+      context: { device: { id: 'device-1' } },
+      getService: jest.fn().mockReturnValue(mockService),
+    }
+
+    platform.accessories.push(mockAccessory)
+
+    const deviceUpdate = { id: 'device-1', brightness: 50 }
+    platform.subscriptionCallback(deviceUpdate)
+
+    // Power wasn't updated, only brightness
+    expect(mockService.updateValue).toHaveBeenCalled()
+  })
+})
+
