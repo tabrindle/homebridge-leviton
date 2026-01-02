@@ -611,7 +611,7 @@ class LevitonDecoraSmartPlatform {
 
         // Ensure we have a valid token before making requests
         debugLog(`[onGetPower] calling _ensureValidToken`)
-        let token = await self._ensureValidToken()
+        const token = await self._ensureValidToken()
         debugLog(`[onGetPower] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
         
         if (!token) {
@@ -700,7 +700,7 @@ class LevitonDecoraSmartPlatform {
 
         // Ensure we have a valid token before making requests
         debugLog(`[onSetPower] calling _ensureValidToken`)
-        let token = await self._ensureValidToken()
+        const token = await self._ensureValidToken()
         debugLog(`[onSetPower] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
         
         if (!token) {
@@ -780,7 +780,7 @@ class LevitonDecoraSmartPlatform {
 
         // Ensure we have a valid token before making requests
         debugLog(`[onGetBrightness] calling _ensureValidToken`)
-        let token = await self._ensureValidToken()
+        const token = await self._ensureValidToken()
         debugLog(`[onGetBrightness] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
         
         if (!token) {
@@ -871,7 +871,7 @@ class LevitonDecoraSmartPlatform {
 
         // Ensure we have a valid token before making requests
         debugLog(`[onSetBrightness] calling _ensureValidToken`)
-        let token = await self._ensureValidToken()
+        const token = await self._ensureValidToken()
         debugLog(`[onSetBrightness] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
         
         if (!token) {
@@ -949,7 +949,7 @@ class LevitonDecoraSmartPlatform {
 
         // Ensure we have a valid token before making requests
         debugLog(`[onGetRotationSpeed] calling _ensureValidToken`)
-        let token = await self._ensureValidToken()
+        const token = await self._ensureValidToken()
         debugLog(`[onGetRotationSpeed] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
         
         if (!token) {
@@ -1040,7 +1040,7 @@ class LevitonDecoraSmartPlatform {
 
         // Ensure we have a valid token before making requests
         debugLog(`[onSetRotationSpeed] calling _ensureValidToken`)
-        let token = await self._ensureValidToken()
+        const token = await self._ensureValidToken()
         debugLog(`[onSetRotationSpeed] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
         
         if (!token) {

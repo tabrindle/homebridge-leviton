@@ -1129,7 +1129,6 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
 
     const wasClean = ev && ev.wasClean
     const code = ev && ev.code
-    const reason = ev && ev.reason
 
     if (wasClean && code === 1000) {
       // Normal closure - don't reconnect
