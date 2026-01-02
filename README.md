@@ -3,6 +3,11 @@
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![npm version](https://badgen.net/npm/v/homebridge-leviton)](https://www.npmjs.com/package/homebridge-leviton)
 [![npm downloads](https://badgen.net/npm/dt/homebridge-leviton)](https://www.npmjs.com/package/homebridge-leviton)
+[![Tests](https://github.com/tbaur/homebridge-leviton/actions/workflows/test.yml/badge.svg)](https://github.com/tbaur/homebridge-leviton/actions/workflows/test.yml)
+[![License: MIT](https://badgen.net/badge/license/MIT/blue)](https://opensource.org/licenses/MIT)
+[![Node.js](https://badgen.net/badge/node/%3E=20/green)](https://nodejs.org)
+[![Homebridge](https://badgen.net/badge/homebridge/%3E=1.6.0/purple)](https://homebridge.io)
+[![GitHub issues](https://badgen.net/github/open-issues/tbaur/homebridge-leviton)](https://github.com/tbaur/homebridge-leviton/issues)
 
 Homebridge plugin for Leviton Decora Smart WiFi devices.
 
