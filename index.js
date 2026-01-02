@@ -591,7 +591,7 @@ class LevitonDecoraSmartPlatform {
         this.log.error(`onGetPower error: ${err.message}`)
         callback(err)
       }
-    }
+    }.bind(this)
   }
 
   /**
@@ -648,7 +648,7 @@ class LevitonDecoraSmartPlatform {
         this.log.error(`onSetPower error: ${err.message}`)
         callback(err)
       }
-    }
+    }.bind(this)
   }
 
   /**
@@ -704,7 +704,7 @@ class LevitonDecoraSmartPlatform {
         this.log.error(`onGetBrightness error: ${err.message}`)
         callback(err)
       }
-    }
+    }.bind(this)
   }
 
   /**
@@ -764,7 +764,7 @@ class LevitonDecoraSmartPlatform {
         this.log.error(`onSetBrightness error: ${err.message}`)
         callback(err)
       }
-    }
+    }.bind(this)
   }
 
   /**
@@ -820,7 +820,7 @@ class LevitonDecoraSmartPlatform {
         this.log.error(`onGetRotationSpeed error: ${err.message}`)
         callback(err)
       }
-    }
+    }.bind(this)
   }
 
   /**
@@ -880,7 +880,7 @@ class LevitonDecoraSmartPlatform {
         this.log.error(`onSetRotationSpeed error: ${err.message}`)
         callback(err)
       }
-    }
+    }.bind(this)
   }
 
   /**
