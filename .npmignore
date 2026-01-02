@@ -1,3 +1,7 @@
 .editorconfig
-.prettierrc
 .vscode
+.github
+tests/
+coverage/
+docs/
+jest.config.js

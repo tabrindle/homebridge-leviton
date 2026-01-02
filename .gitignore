@@ -10,8 +10,3 @@ coverage/
 *.swp
 *.swo
 *~
-
-# Test artifacts (sandboxed tests don't create these, but just in case)
-test-results/
-.pytest_cache/
-__pycache__/
