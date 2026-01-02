@@ -1139,9 +1139,9 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
     // Log full event details at debug level only
     scope.log.debug(`WebSocket closed: ${JSON.stringify(ev)}`)
 
-    // On 401 Unauthorized, don't attempt to reconnect
+    // On 401 Unauthorized after successful connection, don't attempt to reconnect
     // The SockJS session is tied to the original login; re-auth doesn't restore it
-    if (code === 401) {
+    if (code === 401 && isOpen) {
       scope.log.warn('Real-time updates stopped (token expired). Restart Homebridge to restore. Device control still works.')
       return
     }
@@ -1153,7 +1153,13 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
         WS_RECONNECT_MAX_DELAY
       )
 
-      scope.log.info(`WebSocket reconnecting in ${Math.round(delay/1000)}s... (${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
+      // Only log reconnection attempts if connection was previously established
+      // or if this isn't the first attempt (to avoid noise from initial connection issues)
+      if (isOpen || reconnectAttempt > 0) {
+        scope.log.info(`WebSocket reconnecting in ${Math.round(delay/1000)}s... (${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
+      } else {
+        scope.log.debug(`WebSocket initial connection failed (code: ${code}), retrying in ${Math.round(delay/1000)}s...`)
+      }
 
       reconnectTimeout = setTimeout(() => {
         try {

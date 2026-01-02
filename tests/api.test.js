@@ -559,31 +559,55 @@ describe('Leviton API', () => {
       expect(mockWs.close).toHaveBeenCalled()
     })
 
-    it('should handle WebSocket reconnection on close', () => {
+    it('should handle WebSocket reconnection on close after connection was open', () => {
       const login = { id: 'token', userId: 'user-1' }
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
-      // Close with error code
+      // First, simulate successful connection
+      mockWs.onopen()
+
+      // Then close with error code
       mockWs.onclose({ code: 1006, wasClean: false })
 
       // Fast-forward past initial delay
       jest.advanceTimersByTime(1001)
 
-      // Should attempt reconnection
+      // Should attempt reconnection and log at info level (since connection was established)
       expect(mockScope.log.info).toHaveBeenCalledWith(expect.stringContaining('reconnect'))
       expect(SockJS).toHaveBeenCalledTimes(2)
     })
 
-    it('should not reconnect on 401 Unauthorized', () => {
+    it('should not reconnect on 401 Unauthorized after connection was open', () => {
       const login = { id: 'token', userId: 'user-1' }
       Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
 
-      // Close with 401 Unauthorized
+      // First, simulate successful connection
+      mockWs.onopen()
+
+      // Then close with 401 Unauthorized (token expired mid-session)
       mockWs.onclose({ code: 401, wasClean: true, reason: 'Unauthorized' })
 
-      // Should NOT attempt reconnection on 401
+      // Should NOT attempt reconnection on 401 after connection was established
       expect(SockJS).toHaveBeenCalledTimes(1) // Only initial connection
       expect(mockScope.log.warn).toHaveBeenCalledWith(expect.stringContaining('Real-time updates stopped'))
+    })
+
+    it('should retry on 401 if connection was never established', () => {
+      const login = { id: 'token', userId: 'user-1' }
+      Leviton.subscribe(login, [{ id: 'device-1' }], mockCallback, mockScope)
+
+      // Close with 401 BEFORE onopen (initial connection failed)
+      mockWs.onclose({ code: 401, wasClean: false, reason: 'Unauthorized' })
+
+      // Should attempt reconnection since connection was never established
+      // (could be transient server issue, not actual token expiration)
+      expect(mockScope.log.debug).toHaveBeenCalledWith(expect.stringContaining('initial connection failed'))
+
+      // Fast-forward past initial delay
+      jest.advanceTimersByTime(1001)
+
+      // Should have attempted reconnection
+      expect(SockJS).toHaveBeenCalledTimes(2)
     })
 
     it('should stop reconnecting after max attempts', () => {
