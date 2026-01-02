@@ -125,11 +125,14 @@ class LevitonDecoraSmartPlatform {
       this.accessories.forEach((accessory) => {
         if (accessory.context && accessory.context.device) {
           const device = accessory.context.device
-          const service = 
-            accessory.getService(Service.Fan) ||
-            accessory.getService(Service.Switch) ||
-            accessory.getService(Service.Outlet) ||
-            accessory.getService(Service.Lightbulb)
+          
+          // Get specific service types to avoid characteristic warnings
+          const fanService = accessory.getService(Service.Fan)
+          const lightService = accessory.getService(Service.Lightbulb)
+          const switchService = accessory.getService(Service.Switch)
+          const outletService = accessory.getService(Service.Outlet)
+          
+          const service = fanService || lightService || switchService || outletService
           
           if (service) {
             const isOn = service.getCharacteristic(Characteristic.On).value
@@ -140,16 +143,20 @@ class LevitonDecoraSmartPlatform {
               power: isOn ? POWER_ON : POWER_OFF,
             }
             
-            // Add brightness if applicable
-            const brightnessChar = service.getCharacteristic(Characteristic.Brightness)
-            if (brightnessChar) {
-              state.brightness = brightnessChar.value
+            // Add brightness only for lightbulbs (they have Brightness characteristic)
+            if (lightService) {
+              const brightnessChar = lightService.getCharacteristic(Characteristic.Brightness)
+              if (brightnessChar) {
+                state.brightness = brightnessChar.value
+              }
             }
             
-            // Add rotation speed for fans
-            const rotationChar = service.getCharacteristic(Characteristic.RotationSpeed)
-            if (rotationChar) {
-              state.brightness = rotationChar.value
+            // Add rotation speed only for fans (they have RotationSpeed characteristic)
+            if (fanService) {
+              const rotationChar = fanService.getCharacteristic(Characteristic.RotationSpeed)
+              if (rotationChar) {
+                state.brightness = rotationChar.value
+              }
             }
             
             this.devicePersistence.updateDevice(device.id, state)
