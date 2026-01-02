@@ -5,6 +5,18 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.10] - 2026-01-01
+
+### Changed
+- **Cleaner Startup Logging**: Improved info-level logs for better readability
+  - Clear startup sequence: "Starting...", "Connecting...", "Discovering...", "Platform ready"
+  - Startup summary shows device counts: "Found 50 devices (45 cached, 3 new, 2 excluded)"
+  - Removed verbose `[function_name]` prefixes from info logs
+  - Device changes now log cleanly: "Living Room: ON", "Kitchen: 75%"
+  - Kept detailed debug logging for troubleshooting
+
+---
+
 ## [3.0.9] - 2026-01-01
 
 ### Fixed

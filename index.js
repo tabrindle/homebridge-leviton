@@ -224,13 +224,13 @@ class LevitonDecoraSmartPlatform {
    * @returns {Promise<void>}
    */
   async _initialize() {
-    this.log.debug('didFinishLaunching')
+    this.log.info('Starting Leviton Decora Smart platform...')
 
     try {
       const { devices, token } = await this.initialize()
 
       if (!Array.isArray(devices) || devices.length === 0) {
-        this.log.error('Unable to initialize: no devices found')
+        this.log.error('No devices found in your Leviton account')
         return
       }
 
@@ -238,16 +238,29 @@ class LevitonDecoraSmartPlatform {
       const excludedModels = ((this.config.excludedModels || []).map((name) => name.toUpperCase()))
       const excludedSerials = ((this.config.excludedSerials || []).map((name) => name.toUpperCase()))
 
+      // Count device types for summary
+      let newDevices = 0
+      let excludedCount = 0
+      let cachedCount = 0
+
       // Add accessories for discovered devices
       devices.forEach((device) => {
-        if (!this._isDeviceExcluded(device, excludedModels, excludedSerials)) {
-          if (!this._accessoryExists(device)) {
-            this.addAccessory(device, token)
-          }
+        if (this._isDeviceExcluded(device, excludedModels, excludedSerials)) {
+          excludedCount++
+        } else if (this._accessoryExists(device)) {
+          cachedCount++
+        } else {
+          this.addAccessory(device, token)
+          newDevices++
         }
       })
+
+      // Log startup summary
+      this.log.info(`Found ${devices.length} devices (${cachedCount} cached, ${newDevices} new, ${excludedCount} excluded)`)
+      this.log.info('Platform ready')
+      
     } catch (error) {
-      this.log.error(`Failed to initialize platform: ${error.message}`)
+      this.log.error(`Failed to initialize: ${error.message}`)
     }
   }
 
@@ -269,7 +282,7 @@ class LevitonDecoraSmartPlatform {
     }
 
     this.tokenRefreshInProgress = true
-    this.log.info('[_refreshToken] Refreshing authentication token...')
+    this.log.info('Refreshing authentication token...')
 
     try {
       const debugLog = (msg) => this.log.debug(msg)
@@ -297,11 +310,11 @@ class LevitonDecoraSmartPlatform {
         }
       })
 
-      this.log.info(`[_refreshToken] Token refreshed successfully: ${this.currentToken.substring(0, 10)}...`)
+      this.log.info('Token refreshed successfully')
       return this.currentToken
     } catch (error) {
-      this.log.error(`[_refreshToken] FAILED: ${error.message}`)
-      this.log.debug(`[_refreshToken] Error stack: ${error.stack}`)
+      this.log.error(`Token refresh failed: ${error.message}`)
+      this.log.debug(`Token refresh error stack: ${error.stack}`)
       return null
     } finally {
       this.tokenRefreshInProgress = false
@@ -443,6 +456,7 @@ class LevitonDecoraSmartPlatform {
     let devices = []
 
     // Step 1: Login
+    this.log.info('Connecting to My Leviton...')
     try {
       const login = await Leviton.postPersonLogin({
         email: this.config.email,
@@ -457,13 +471,14 @@ class LevitonDecoraSmartPlatform {
       personID = login.userId
       this.currentToken = token  // Store centrally for refresh capability
       this.log.debug(`personID: ${personID}, hasToken: ${!!token}`)
+      this.log.info('Authentication successful')
     } catch (err) {
-      const errorMsg = `Failed to login to Leviton: ${err.message}`
-      this.log.error(errorMsg)
-      throw new Error(errorMsg)
+      this.log.error(`Login failed: ${err.message}`)
+      throw new Error(`Failed to login to Leviton: ${err.message}`)
     }
 
     // Step 2: Get residential permissions
+    this.log.info('Loading residence information...')
     try {
       const permissions = await Leviton.getPersonResidentialPermissions({
         personID,
@@ -477,9 +492,8 @@ class LevitonDecoraSmartPlatform {
       accountID = permissions[0].residentialAccountId
       this.log.debug(`accountID: ${accountID}`)
     } catch (err) {
-      const errorMsg = `Failed to get Leviton accountID: ${err.message}`
-      this.log.error(errorMsg)
-      throw new Error(errorMsg)
+      this.log.error(`Failed to get residence: ${err.message}`)
+      throw new Error(`Failed to get Leviton accountID: ${err.message}`)
     }
 
     // Step 3: Get residential accounts
@@ -497,12 +511,12 @@ class LevitonDecoraSmartPlatform {
       residenceObjectID = accounts.id
       this.log.debug(`residenceID: ${residenceID}`)
     } catch (err) {
-      const errorMsg = `Failed to get Leviton residenceID: ${err.message}`
-      this.log.error(errorMsg)
-      throw new Error(errorMsg)
+      this.log.error(`Failed to get residence details: ${err.message}`)
+      throw new Error(`Failed to get Leviton residenceID: ${err.message}`)
     }
 
     // Step 4: Get devices
+    this.log.info('Discovering devices...')
     try {
       devices = await Leviton.getResidenceIotSwitches({
         residenceID,
@@ -513,15 +527,15 @@ class LevitonDecoraSmartPlatform {
         devices = []
       }
 
-      this.log.debug(`Found ${devices.length} devices`)
+      this.log.debug(`Found ${devices.length} devices via primary API`)
     } catch (err) {
-      this.log.error(`Failed to get Leviton devices: ${err.message}`)
+      this.log.debug(`Primary device API failed: ${err.message}`)
       devices = []
     }
 
     // Step 5: Try v2 API if no devices found
     if (!Array.isArray(devices) || devices.length === 0) {
-      this.log.info('No devices found for primary residence id. Trying residence v2')
+      this.log.debug('Trying alternate residence API...')
 
       try {
         const accountsV2Response = await Leviton.getResidentialAccountsV2({
@@ -545,18 +559,19 @@ class LevitonDecoraSmartPlatform {
           throw new Error(`No devices found for residenceID: ${residenceID} or residenceIDV2 method: ${residenceObjectID}`)
         }
       } catch (err) {
-        const errorMsg = `Failed to get devices via v2 API: ${err.message}`
-        this.log.error(errorMsg)
-        throw new Error(errorMsg)
+        this.log.error(`Failed to discover devices: ${err.message}`)
+        throw new Error(`Failed to get devices: ${err.message}`)
       }
     }
 
     // Step 6: Subscribe to WebSocket updates
+    this.log.info('Connecting to real-time updates...')
     try {
       const login = { id: token, userId: personID }
       Leviton.subscribe(login, devices, this.subscriptionCallback.bind(this), this)
+      this.log.debug('WebSocket subscription established')
     } catch (err) {
-      this.log.error(`Error subscribing devices to websocket updates: ${err.message}`)
+      this.log.warn(`Real-time updates unavailable: ${err.message}`)
       // Don't throw - continue without WebSocket updates
     }
 
@@ -719,7 +734,7 @@ class LevitonDecoraSmartPlatform {
         }
 
         const isOn = res.power === POWER_ON
-        self.log.info(`[onSetPower] SUCCESS device=${device.name} power=${res.power}`)
+        self.log.info(`${device.name}: ${res.power}`)
         service.getCharacteristic(Characteristic.On).updateValue(isOn)
         debugLog(`[onSetPower] calling callback()`)
         callback()
@@ -888,7 +903,7 @@ class LevitonDecoraSmartPlatform {
           throw new Error('API returned null/undefined response')
         }
 
-        self.log.info(`[onSetBrightness] SUCCESS device=${device.name} brightness=${res.brightness}%`)
+        self.log.info(`${device.name}: ${res.brightness}%`)
         service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
         debugLog(`[onSetBrightness] calling callback()`)
         callback()
@@ -1057,7 +1072,7 @@ class LevitonDecoraSmartPlatform {
           throw new Error('API returned null/undefined response')
         }
 
-        self.log.info(`[onSetRotationSpeed] SUCCESS device=${device.name} speed=${res.brightness}%`)
+        self.log.info(`${device.name}: ${res.brightness}% speed`)
         service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
         debugLog(`[onSetRotationSpeed] calling callback()`)
         callback()
@@ -1083,7 +1098,7 @@ class LevitonDecoraSmartPlatform {
       return
     }
 
-    this.log.info(`addAccessory ${device.name}`)
+    this.log.info(`Adding device: ${device.name} (${device.model})`)
 
     // Generate UUID based on device serial and create accessory
     const uuid = UUID.generate(device.serial)
@@ -1353,7 +1368,7 @@ class LevitonDecoraSmartPlatform {
       .getCharacteristic(Characteristic.MotionDetected)
       .updateValue(status.occupancy === true || status.motion === true || false)
 
-    this.log.info(`Motion sensor enabled for ${device.name} (motion data depends on API support)`)
+    this.log.debug(`Motion sensor enabled for ${device.name}`)
   }
 
   /**
