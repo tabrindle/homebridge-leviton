@@ -964,7 +964,6 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
     throw new Error('login object with id property is required')
   }
 
-  const token = login.id
   let reconnectTimeout
 
   const ws = new SockJS(SOCKET_URL, {
@@ -1076,8 +1075,8 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
 
     // Handle challenge message
     if (data.type === WS_MESSAGE_TYPES.CHALLENGE) {
-      // Send token string, not the full login object
-      const response = [JSON.stringify({ token })]
+      // Send token from login object (may be updated on re-auth)
+      const response = [JSON.stringify({ token: login.id })]
       ws.send(response)
       return
     }
