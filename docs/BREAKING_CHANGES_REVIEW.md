@@ -1,11 +1,16 @@
 # Breaking Changes
 
-## v3.0.0
+## v3.0.x
 
-No breaking changes. New features:
+No breaking changes. All updates are backward compatible.
+
+### New Features (v3.0.0+)
 - Circuit breaker pattern
 - Device state persistence  
 - Structured logging (optional)
+- Token auto-refresh on 401
+- Request deduplication
+- Motion sensor dimmer support (D2MSD)
 
 ## v2.1.0
 
@@ -20,4 +25,4 @@ If you were using the incorrect spelling, update your config.
 
 ---
 
-*Last updated: 2026-01-01*
+*Last updated: 2026-01-02*

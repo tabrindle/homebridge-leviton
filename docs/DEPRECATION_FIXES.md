@@ -15,7 +15,9 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "jest": "^30.2.0"
+    "jest": "^30.2.0",
+    "globals": "^15.0.0",
+    "nock": "^14.0.5"
   }
 }
 ```
@@ -24,4 +26,4 @@ No deprecation warnings. Run `npm audit` to verify.
 
 ---
 
-*Last updated: 2026-01-01*
+*Last updated: 2026-01-02*

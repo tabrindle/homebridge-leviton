@@ -21,4 +21,4 @@ This plugin supports both Homebridge v1.6+ and v2.0+.
 
 ---
 
-*Last updated: 2026-01-01*
+*Last updated: 2026-01-02*
