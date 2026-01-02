@@ -1205,10 +1205,16 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
     // Handle challenge message
     if (data.type === WS_MESSAGE_TYPES.CHALLENGE) {
       challengeReceived = true
-      // Send token from login object (may be updated on re-auth)
-      scope.log.debug(`Received challenge, responding with token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}`)
-      const response = JSON.stringify({ token: login.id })
-      scope.log.debug(`Sending auth response: ${response.substring(0, 50)}...`)
+      // Log the full challenge to understand what server expects
+      scope.log.debug(`Received challenge: ${JSON.stringify(data)}`)
+      scope.log.debug(`Responding with token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}`)
+      // Include both token and userId in auth response
+      const authData = { token: login.id }
+      if (login.userId) {
+        authData.userId = login.userId
+      }
+      const response = JSON.stringify(authData)
+      scope.log.debug(`Sending auth response: ${response.substring(0, 80)}...`)
       ws.send(response)
       authResponseSent = true
       return
