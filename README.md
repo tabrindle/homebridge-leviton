@@ -53,9 +53,10 @@ Add to your `config.json`:
 | Type | Models |
 |------|--------|
 | **Dimmers** | DW6HD, D26HD, DW1KD, DW3HL, D23LP, DWVAA |
+| **Motion Sensor Dimmers** | D2MSD (dimmer + motion sensor in HomeKit) |
 | **Outlets** | DW15P, DW15A, DW15R |
 | **Fans** | DW4SF |
-| **Switches** | Other WiFi models (basic on/off) |
+| **Switches** | DW15S, D215S, and other WiFi models (on/off) |
 
 ## Troubleshooting
 

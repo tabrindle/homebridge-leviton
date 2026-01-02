@@ -19,6 +19,7 @@ const mockService = {
   Outlet: 'Outlet',
   Lightbulb: 'Lightbulb',
   Fan: 'Fan',
+  MotionSensor: 'MotionSensor',
   AccessoryInformation: 'AccessoryInformation',
 }
 
@@ -26,6 +27,7 @@ const mockCharacteristic = {
   On: 'On',
   Brightness: 'Brightness',
   RotationSpeed: 'RotationSpeed',
+  MotionDetected: 'MotionDetected',
   Name: 'Name',
   SerialNumber: 'SerialNumber',
   Manufacturer: 'Manufacturer',
@@ -614,6 +616,64 @@ describe('LevitonDecoraSmartPlatform', () => {
       await platform.setupService(accessory)
       expect(mockLog).toHaveBeenCalled()
     })
+
+    it('should setup motion dimmer service for D2MSD model', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON', brightness: 50, minLevel: 1, maxLevel: 100 })
+      const accessory = mockApi.platformAccessory('Test Motion Dimmer', 'uuid')
+      accessory.context.device = { id: 'device-1', name: 'Test Motion Dimmer', serial: 'SERIAL123', model: 'D2MSD' }
+      accessory.context.token = 'token'
+      await platform.setupService(accessory)
+      // Should setup both Lightbulb and MotionSensor services
+      expect(accessory.addService).toHaveBeenCalled()
+      expect(mockLog).toHaveBeenCalled()
+    })
+
+    it('should setup motion dimmer service with motion data in status', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'OFF', brightness: 0, minLevel: 1, maxLevel: 100, occupancy: true })
+      const accessory = mockApi.platformAccessory('Motion Dimmer 2', 'uuid')
+      accessory.context.device = { id: 'device-2', name: 'Motion Dimmer 2', serial: 'SERIAL456', model: 'D2MSD' }
+      accessory.context.token = 'token'
+      await platform.setupService(accessory)
+      expect(accessory.addService).toHaveBeenCalled()
+    })
+
+    it('should handle getStatus error in setupMotionDimmerService', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      Leviton.getIotSwitch.mockRejectedValueOnce(new Error('API Error'))
+      const accessory = mockApi.platformAccessory('Test Motion', 'uuid')
+      accessory.context.device = { id: 'device-1', name: 'Test Motion', serial: 'SERIAL123', model: 'D2MSD' }
+      accessory.context.token = 'token'
+      await platform.setupService(accessory)
+      expect(mockLog).toHaveBeenCalled()
+    })
+
+    it('should setup switch service for known switch models', async () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      Leviton.getIotSwitch.mockResolvedValueOnce({ power: 'ON' })
+      const accessory = mockApi.platformAccessory('Test Switch', 'uuid')
+      accessory.context.device = { id: 'device-1', name: 'Test Switch', serial: 'SERIAL123', model: 'DW15S' }
+      accessory.context.token = 'token'
+      await platform.setupService(accessory)
+      expect(accessory.addService).toHaveBeenCalled()
+    })
   })
 
   describe('subscriptionCallback', () => {
@@ -729,6 +789,70 @@ describe('LevitonDecoraSmartPlatform', () => {
       }
       platform.subscriptionCallback(payload)
       expect(fanService.getCharacteristic).toHaveBeenCalled()
+    })
+
+    it('should handle motion sensor update', () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const accessory = mockApi.platformAccessory('Test Motion', 'uuid')
+      accessory.context.device = { id: 'device-1', name: 'Test Motion' }
+      const lightService = {
+        getCharacteristic: jest.fn().mockReturnThis(),
+        updateValue: jest.fn(),
+      }
+      const motionService = {
+        getCharacteristic: jest.fn().mockReturnThis(),
+        updateValue: jest.fn(),
+      }
+      accessory.getService.mockImplementation((serviceType) => {
+        if (serviceType === mockService.Lightbulb) return lightService
+        if (serviceType === mockService.MotionSensor) return motionService
+        return null
+      })
+      platform.accessories.push(accessory)
+      const payload = {
+        id: 'device-1',
+        power: 'ON',
+        brightness: 50,
+        occupancy: true,
+      }
+      platform.subscriptionCallback(payload)
+      expect(lightService.getCharacteristic).toHaveBeenCalled()
+      expect(motionService.getCharacteristic).toHaveBeenCalled()
+    })
+
+    it('should handle motion clear update', () => {
+      const config = {
+        email: 'test@example.com',
+        password: 'password123',
+      }
+      const platform = new LevitonDecoraSmartPlatform(mockLog, config, mockApi)
+      const accessory = mockApi.platformAccessory('Test Motion', 'uuid')
+      accessory.context.device = { id: 'device-1', name: 'Test Motion' }
+      const lightService = {
+        getCharacteristic: jest.fn().mockReturnThis(),
+        updateValue: jest.fn(),
+      }
+      const motionService = {
+        getCharacteristic: jest.fn().mockReturnThis(),
+        updateValue: jest.fn(),
+      }
+      accessory.getService.mockImplementation((serviceType) => {
+        if (serviceType === mockService.Lightbulb) return lightService
+        if (serviceType === mockService.MotionSensor) return motionService
+        return null
+      })
+      platform.accessories.push(accessory)
+      const payload = {
+        id: 'device-1',
+        power: 'OFF',
+        motion: false,
+      }
+      platform.subscriptionCallback(payload)
+      expect(motionService.getCharacteristic).toHaveBeenCalled()
     })
   })
 

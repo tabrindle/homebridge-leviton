@@ -19,16 +19,28 @@ const POWER_OFF = 'OFF'
 
 // Device model constants
 const DEVICE_MODELS = {
+  // Fan Controllers
   FAN: 'DW4SF', // Fan Speed Control
+  
+  // Dimmers
   DIMmer_VOICE: 'DWVAA', // Voice Dimmer with Amazon Alexa
   DIMmer_1000W: 'DW1KD', // 1000W Dimmer
   DIMmer_600W: 'DW6HD', // 600W Dimmer
   DIMmer_600W_GEN2: 'D26HD', // 600W Dimmer (2nd Gen)
   DIMmer_PLUGIN_GEN2: 'D23LP', // Plug-In Dimmer (2nd Gen)
   DIMmer_PLUGIN: 'DW3HL', // Plug-In Dimmer
+  
+  // Motion Sensor Dimmers
+  DIMMER_MOTION: 'D2MSD', // Motion Sensor Dimmer (2nd Gen)
+  
+  // Outlets
   OUTLET_TAMPER: 'DW15R', // Tamper Resistant Outlet
   OUTLET_PLUGIN_HP: 'DW15A', // Plug-in Outlet (1/2 HP)
   OUTLET_PLUGIN: 'DW15P', // Plug-in Outlet (3/4 HP)
+  
+  // Switches (for explicit identification)
+  SWITCH_15A: 'DW15S', // 15A Switch (1st Gen)
+  SWITCH_15A_GEN2: 'D215S', // 15A Switch (2nd Gen)
 }
 
 // Dimmer models array for easy checking
@@ -41,8 +53,16 @@ const DIMMER_MODELS = [
   DEVICE_MODELS.DIMmer_PLUGIN,
 ]
 
+// Motion sensor dimmer models
+const MOTION_DIMMER_MODELS = [
+  DEVICE_MODELS.DIMMER_MOTION,
+]
+
 // Outlet models array
 const OUTLET_MODELS = [DEVICE_MODELS.OUTLET_TAMPER, DEVICE_MODELS.OUTLET_PLUGIN_HP, DEVICE_MODELS.OUTLET_PLUGIN]
+
+// Switch models array
+const SWITCH_MODELS = [DEVICE_MODELS.SWITCH_15A, DEVICE_MODELS.SWITCH_15A_GEN2]
 
 /**
  * Leviton Decora Smart Platform for Homebridge
@@ -270,7 +290,7 @@ class LevitonDecoraSmartPlatform {
       return
     }
 
-    const { id, power, brightness } = payload
+    const { id, power, brightness, occupancy, motion } = payload
 
     this.log.debug(`Socket: ${accessory.displayName} (${id}): ${power} ${brightness ? `${brightness}%` : ''}`)
 
@@ -296,6 +316,14 @@ class LevitonDecoraSmartPlatform {
     // Update power state
     if (power !== undefined) {
       service.getCharacteristic(Characteristic.On).updateValue(power === POWER_ON)
+    }
+
+    // Update motion sensor if present (for motion/occupancy dimmers)
+    const motionService = accessory.getService(Service.MotionSensor)
+    if (motionService && (occupancy !== undefined || motion !== undefined)) {
+      const motionDetected = occupancy === true || motion === true
+      motionService.getCharacteristic(Characteristic.MotionDetected).updateValue(motionDetected)
+      this.log.debug(`Motion update: ${accessory.displayName} - ${motionDetected ? 'detected' : 'clear'}`)
     }
   }
 
@@ -768,10 +796,14 @@ class LevitonDecoraSmartPlatform {
     // Determine service type based on model
     if (device.model === DEVICE_MODELS.FAN) {
       await this.setupFanService(accessory)
+    } else if (MOTION_DIMMER_MODELS.includes(device.model)) {
+      await this.setupMotionDimmerService(accessory)
     } else if (DIMMER_MODELS.includes(device.model)) {
       await this.setupLightbulbService(accessory)
     } else if (OUTLET_MODELS.includes(device.model)) {
       await this.setupOutletService(accessory)
+    } else if (SWITCH_MODELS.includes(device.model)) {
+      await this.setupSwitchService(accessory)
     } else {
       // Default to switch for unknown models
       await this.setupSwitchService(accessory)
@@ -838,6 +870,59 @@ class LevitonDecoraSmartPlatform {
         minStep: 1,
       })
       .updateValue(status.brightness || 0)
+  }
+
+  /**
+   * Sets up a motion sensor dimmer service (Lightbulb + MotionSensor)
+   * @param {Object} accessory - Platform accessory
+   * @returns {Promise<void>}
+   */
+  async setupMotionDimmerService(accessory) {
+    this.log.debug(`Setting up device as Motion Dimmer: ${accessory.displayName}`)
+
+    const device = accessory.context.device
+    const token = accessory.context.token
+
+    let status
+    try {
+      status = await this.getStatus(device, token)
+    } catch (err) {
+      this.log.error(`Failed to get status for ${device.name}: ${err.message}`)
+      status = { power: POWER_OFF, brightness: 0, minLevel: 1, maxLevel: 100 }
+    }
+
+    // Setup Lightbulb service for dimming
+    const lightService =
+      accessory.getService(Service.Lightbulb, device.name) || accessory.addService(Service.Lightbulb, device.name)
+
+    lightService
+      .getCharacteristic(Characteristic.On)
+      .on('get', this.onGetPower(lightService, device, token).bind(this))
+      .on('set', this.onSetPower(lightService, device, token).bind(this))
+      .updateValue(status.power === POWER_ON)
+
+    lightService
+      .getCharacteristic(Characteristic.Brightness)
+      .on('get', this.onGetBrightness(lightService, device, token).bind(this))
+      .on('set', this.onSetBrightness(lightService, device, token).bind(this))
+      .setProps({
+        minValue: status.minLevel || 1,
+        maxValue: status.maxLevel || 100,
+        minStep: 1,
+      })
+      .updateValue(status.brightness || 0)
+
+    // Setup MotionSensor service
+    // Note: Motion detection depends on Leviton API providing occupancy data
+    const motionService =
+      accessory.getService(Service.MotionSensor) || accessory.addService(Service.MotionSensor, `${device.name} Motion`)
+
+    // Initialize motion as not detected (API will update via WebSocket if supported)
+    motionService
+      .getCharacteristic(Characteristic.MotionDetected)
+      .updateValue(status.occupancy === true || status.motion === true || false)
+
+    this.log.info(`Motion sensor enabled for ${device.name} (motion data depends on API support)`)
   }
 
   /**
