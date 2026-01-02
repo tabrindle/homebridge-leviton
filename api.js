@@ -1020,8 +1020,25 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
 
       scope.log.info(`Attempting to reconnect WebSocket in ${delay}ms (attempt ${reconnectAttempt + 1}/${WS_RECONNECT_MAX_ATTEMPTS})`)
 
-      reconnectTimeout = setTimeout(() => {
+      reconnectTimeout = setTimeout(async () => {
         try {
+          // On 401 Unauthorized, re-authenticate before reconnecting
+          if (code === 401 && scope.config && scope.config.email && scope.config.password) {
+            scope.log.info('Token expired, re-authenticating...')
+            try {
+              const newLogin = await postPersonLogin({
+                email: scope.config.email,
+                password: scope.config.password,
+              })
+              // Update login object with new token
+              login.id = newLogin.id
+              login.userId = newLogin.userId
+              scope.log.info('Re-authentication successful, reconnecting WebSocket...')
+            } catch (authError) {
+              scope.log.error(`Re-authentication failed: ${authError.message}`)
+              // Continue with old token anyway, will fail but count as attempt
+            }
+          }
           createWebSocketConnection(login, devices, callback, scope, reconnectAttempt + 1)
         } catch (error) {
           scope.log.error(`Failed to reconnect WebSocket: ${error.message}`)
