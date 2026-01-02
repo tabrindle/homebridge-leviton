@@ -82,7 +82,7 @@
 
 ### 🟡 Priority 5: ES Modules Migration - FUTURE
 
-**Status:** Planned for future release
+**Status:** Low value for this project, deferred indefinitely
 
 **Benefits:**
 - Modern JavaScript standard
