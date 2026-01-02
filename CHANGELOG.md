@@ -5,6 +5,17 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.8] - 2026-01-01
+
+### Fixed
+- **Rate Limiter Removed for GET Requests**: Fixes bouncing/unresponsive issues with 50+ devices
+  - Rate limiter now only applies to write operations (PUT/POST)
+  - GET requests (status queries) are no longer rate limited internally
+  - Leviton API handles its own rate limiting and returns 429 if hit
+  - This allows large installations (50+ devices) to work without self-imposed failures
+
+---
+
 ## [3.0.7] - 2026-01-01
 
 ### Fixed

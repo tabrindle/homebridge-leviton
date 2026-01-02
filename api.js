@@ -19,8 +19,9 @@ const DEFAULT_HEADERS = {
 }
 
 // Rate limiting configuration
-// Increased to handle startup burst when HomeKit queries all devices at once
-const RATE_LIMIT_MAX_REQUESTS = 200 // Maximum requests per window (was 60)
+// Effectively disabled - let Leviton API handle its own rate limiting (returns 429)
+// With 50+ devices × 2 queries each, we need to allow bursts at startup
+const RATE_LIMIT_MAX_REQUESTS = 1000 // Very high to allow startup burst
 const RATE_LIMIT_WINDOW_MS = 60000 // 1 minute window
 
 // API response cache configuration
@@ -633,14 +634,20 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     throw new Error(`Circuit breaker is OPEN. Service unavailable. Retry in ${Math.ceil(waitTime / 1000)}s`)
   }
 
-  // Rate limiting: check if we can proceed (non-blocking for better HomeKit responsiveness)
-  log(`[apiRequest] checking rate limiter...`)
-  const canProceed = rateLimiter.acquire()
-  if (!canProceed) {
-    log(`[apiRequest] RATE LIMITED - too many requests, failing fast`)
-    throw new Error('Rate limited - too many concurrent requests. Try again shortly.')
+  // Rate limiting: only apply to write operations (PUT/POST), not reads (GET)
+  // GET requests are safe to burst - Leviton API will return 429 if we hit their limits
+  const method = options.method || 'GET'
+  if (method !== 'GET') {
+    log(`[apiRequest] checking rate limiter for ${method}...`)
+    const canProceed = rateLimiter.acquire()
+    if (!canProceed) {
+      log(`[apiRequest] RATE LIMITED - too many write requests`)
+      throw new Error('Rate limited - too many concurrent requests. Try again shortly.')
+    }
+    log(`[apiRequest] rate limiter OK`)
+  } else {
+    log(`[apiRequest] skipping rate limiter for GET request`)
   }
-  log(`[apiRequest] rate limiter OK, proceeding`)
 
   // Track half-open request if applicable
   if (!bypassCircuitBreaker && circuitBreaker.state === CircuitState.HALF_OPEN) {
