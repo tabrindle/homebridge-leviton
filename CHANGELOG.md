@@ -5,6 +5,24 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.6] - 2026-01-01
+
+### Added
+- **Comprehensive Debug Logging**: Added detailed API request/response tracing
+  - Full request URL, headers, and body logging in debug mode
+  - Raw API response bodies logged for troubleshooting
+  - Cache hit/miss tracking for `getIotSwitch` calls
+  - Token lifecycle logging (acquisition, refresh, expiration)
+  - Step-by-step trace through all characteristic handlers (`onGetPower`, `onSetPower`, etc.)
+  
+### Changed
+- All API functions now accept optional `debugLog` callback for tracing
+- Handler functions log entry/exit with device info and response data
+- `_ensureValidToken` and `_refreshToken` log detailed state transitions
+- `postPersonLogin` logs authentication flow (without exposing credentials)
+
+---
+
 ## [3.0.5] - 2026-01-01
 
 ### Fixed

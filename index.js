@@ -250,24 +250,38 @@ class LevitonDecoraSmartPlatform {
    * @returns {Promise<string|null>} New token or null if refresh failed
    */
   async _refreshToken() {
+    this.log.debug(`[_refreshToken] START tokenRefreshInProgress=${this.tokenRefreshInProgress}`)
+    
     // Prevent concurrent refresh attempts
     if (this.tokenRefreshInProgress) {
-      this.log.debug('Token refresh already in progress, waiting...')
+      this.log.debug('[_refreshToken] Token refresh already in progress, waiting...')
       // Wait for existing refresh to complete
       await new Promise(resolve => setTimeout(resolve, 2000))
+      this.log.debug(`[_refreshToken] returning after wait: currentToken=${this.currentToken ? this.currentToken.substring(0, 10) + '...' : 'NONE'}`)
       return this.currentToken
     }
 
     this.tokenRefreshInProgress = true
-    this.log.info('Refreshing authentication token...')
+    this.log.info('[_refreshToken] Refreshing authentication token...')
 
     try {
+      const debugLog = (msg) => this.log.debug(msg)
+      this.log.debug(`[_refreshToken] calling postPersonLogin for ${this.config.email}`)
       const login = await Leviton.postPersonLogin({
         email: this.config.email,
         password: this.config.password,
+        debugLog,
       })
+      
+      this.log.debug(`[_refreshToken] postPersonLogin response: ${JSON.stringify(login)}`)
+
+      if (!login || !login.id) {
+        this.log.error(`[_refreshToken] login response missing 'id' field: ${JSON.stringify(login)}`)
+        return null
+      }
 
       this.currentToken = login.id
+      this.log.debug(`[_refreshToken] set currentToken=${this.currentToken.substring(0, 10)}...`)
       
       // Update token in all accessory contexts
       this.accessories.forEach(accessory => {
@@ -276,10 +290,11 @@ class LevitonDecoraSmartPlatform {
         }
       })
 
-      this.log.info('Token refreshed successfully')
+      this.log.info(`[_refreshToken] Token refreshed successfully: ${this.currentToken.substring(0, 10)}...`)
       return this.currentToken
     } catch (error) {
-      this.log.error(`Failed to refresh token: ${error.message}`)
+      this.log.error(`[_refreshToken] FAILED: ${error.message}`)
+      this.log.debug(`[_refreshToken] Error stack: ${error.stack}`)
       return null
     } finally {
       this.tokenRefreshInProgress = false
@@ -293,17 +308,22 @@ class LevitonDecoraSmartPlatform {
    * @throws {Error} If unable to obtain a valid token
    */
   async _ensureValidToken() {
+    this.log.debug(`[_ensureValidToken] called, currentToken=${this.currentToken ? this.currentToken.substring(0, 10) + '...' : 'NONE'}`)
+    
     // If we already have a token, return it
     if (this.currentToken) {
+      this.log.debug(`[_ensureValidToken] returning existing token`)
       return this.currentToken
     }
     
     // No token yet - need to login
-    this.log.debug('No token available, performing login...')
+    this.log.debug('[_ensureValidToken] No token available, calling _refreshToken...')
     const newToken = await this._refreshToken()
     if (!newToken) {
+      this.log.error('[_ensureValidToken] _refreshToken returned null/undefined')
       throw new Error('Unable to obtain authentication token')
     }
+    this.log.debug(`[_ensureValidToken] got new token from _refreshToken: ${newToken.substring(0, 10)}...`)
     return newToken
   }
 
@@ -546,37 +566,50 @@ class LevitonDecoraSmartPlatform {
   onGetPower(service, device, _token) {
     const self = this
     return async function (callback) {
+      // Debug log helper that routes to platform logger
+      const debugLog = (msg) => self.log.debug(msg)
+      
       // Wrap everything in try-catch to ensure we always respond
       try {
-        self.log.debug(`onGetPower called for ${device.name}`)
+        debugLog(`[onGetPower] START device=${device.name} id=${device.id}`)
         
         if (!callback || typeof callback !== 'function') {
-          self.log.error('Invalid callback provided to onGetPower')
+          self.log.error('[onGetPower] Invalid callback provided')
           return
         }
 
         const makeRequest = async (token) => {
+          debugLog(`[onGetPower] makeRequest called with token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
           return Leviton.getIotSwitch({
             switchID: device.id,
             token,
+            debugLog,
           })
         }
 
         // Ensure we have a valid token before making requests
-        self.log.debug(`onGetPower: ensuring valid token for ${device.name}`)
+        debugLog(`[onGetPower] calling _ensureValidToken`)
         let token = await self._ensureValidToken()
-        self.log.debug(`onGetPower: got token for ${device.name}`)
+        debugLog(`[onGetPower] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+        
+        if (!token) {
+          throw new Error('No valid token available')
+        }
         
         let res
         try {
           res = await makeRequest(token)
+          debugLog(`[onGetPower] API response: ${JSON.stringify(res)}`)
         } catch (err) {
+          debugLog(`[onGetPower] API error: ${err.message}`)
           // On 401, refresh token and retry once
           if (err.message && err.message.includes('401')) {
-            self.log.debug('Token expired, refreshing...')
+            debugLog('[onGetPower] Token expired, refreshing...')
             const newToken = await self._refreshToken()
             if (newToken) {
+              debugLog(`[onGetPower] Got new token, retrying request`)
               res = await makeRequest(newToken)
+              debugLog(`[onGetPower] Retry response: ${JSON.stringify(res)}`)
             } else {
               throw new Error('Token refresh failed')
             }
@@ -585,17 +618,23 @@ class LevitonDecoraSmartPlatform {
           }
         }
 
-        if (!res || res.power === undefined) {
-          throw new Error('Invalid response from getIotSwitch')
+        if (!res) {
+          throw new Error('API returned null/undefined response')
+        }
+        
+        if (res.power === undefined) {
+          debugLog(`[onGetPower] Response missing 'power' field. Full response: ${JSON.stringify(res)}`)
+          throw new Error(`Invalid response - missing 'power' field. Got: ${JSON.stringify(res)}`)
         }
 
         const isOn = res.power === POWER_ON
-        self.log.debug(`onGetPower: ${device.name} ${res.power}`)
+        debugLog(`[onGetPower] SUCCESS device=${device.name} power=${res.power} isOn=${isOn}`)
         service.getCharacteristic(Characteristic.On).updateValue(isOn)
+        debugLog(`[onGetPower] calling callback(null, ${isOn})`)
         callback(null, isOn)
       } catch (err) {
         const errorMsg = err && err.message ? err.message : String(err)
-        self.log.error(`onGetPower error for ${device.name}: ${errorMsg}`)
+        self.log.error(`[onGetPower] FAILED device=${device.name} error=${errorMsg}`)
         if (callback && typeof callback === 'function') {
           callback(new Error(errorMsg))
         }
@@ -613,37 +652,53 @@ class LevitonDecoraSmartPlatform {
   onSetPower(service, device, _token) {
     const self = this
     return async function (value, callback) {
+      // Debug log helper that routes to platform logger
+      const debugLog = (msg) => self.log.debug(msg)
+      
       try {
-        self.log.debug(`onSetPower called for ${device.name}: ${value}`)
+        debugLog(`[onSetPower] START device=${device.name} id=${device.id} value=${value}`)
         
         if (!callback || typeof callback !== 'function') {
-          self.log.error('Invalid callback provided to onSetPower')
+          self.log.error('[onSetPower] Invalid callback provided')
           return
         }
 
         const powerValue = value ? POWER_ON : POWER_OFF
+        debugLog(`[onSetPower] powerValue=${powerValue}`)
 
         const makeRequest = async (token) => {
+          debugLog(`[onSetPower] makeRequest called with token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
           return Leviton.putIotSwitch({
             switchID: device.id,
             power: powerValue,
             token,
+            debugLog,
           })
         }
 
         // Ensure we have a valid token before making requests
+        debugLog(`[onSetPower] calling _ensureValidToken`)
         let token = await self._ensureValidToken()
+        debugLog(`[onSetPower] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+        
+        if (!token) {
+          throw new Error('No valid token available')
+        }
         
         let res
         try {
           res = await makeRequest(token)
+          debugLog(`[onSetPower] API response: ${JSON.stringify(res)}`)
         } catch (err) {
+          debugLog(`[onSetPower] API error: ${err.message}`)
           // On 401, refresh token and retry once
           if (err.message && err.message.includes('401')) {
-            self.log.debug('Token expired, refreshing...')
+            debugLog('[onSetPower] Token expired, refreshing...')
             const newToken = await self._refreshToken()
             if (newToken) {
+              debugLog(`[onSetPower] Got new token, retrying request`)
               res = await makeRequest(newToken)
+              debugLog(`[onSetPower] Retry response: ${JSON.stringify(res)}`)
             } else {
               throw new Error('Token refresh failed')
             }
@@ -652,13 +707,18 @@ class LevitonDecoraSmartPlatform {
           }
         }
 
+        if (!res) {
+          throw new Error('API returned null/undefined response')
+        }
+
         const isOn = res.power === POWER_ON
-        self.log.info(`onSetPower: ${device.name} ${res.power}`)
+        self.log.info(`[onSetPower] SUCCESS device=${device.name} power=${res.power}`)
         service.getCharacteristic(Characteristic.On).updateValue(isOn)
+        debugLog(`[onSetPower] calling callback()`)
         callback()
       } catch (err) {
         const errorMsg = err && err.message ? err.message : String(err)
-        self.log.error(`onSetPower error for ${device.name}: ${errorMsg}`)
+        self.log.error(`[onSetPower] FAILED device=${device.name} error=${errorMsg}`)
         if (callback && typeof callback === 'function') {
           callback(new Error(errorMsg))
         }
@@ -676,33 +736,48 @@ class LevitonDecoraSmartPlatform {
   onGetBrightness(service, device, _token) {
     const self = this
     return async function (callback) {
+      // Debug log helper that routes to platform logger
+      const debugLog = (msg) => self.log.debug(msg)
+      
       try {
-        self.log.debug(`onGetBrightness called for ${device.name}`)
+        debugLog(`[onGetBrightness] START device=${device.name} id=${device.id}`)
         
         if (!callback || typeof callback !== 'function') {
-          self.log.error('Invalid callback provided to onGetBrightness')
+          self.log.error('[onGetBrightness] Invalid callback provided')
           return
         }
 
         const makeRequest = async (token) => {
+          debugLog(`[onGetBrightness] makeRequest called with token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
           return Leviton.getIotSwitch({
             switchID: device.id,
             token,
+            debugLog,
           })
         }
 
         // Ensure we have a valid token before making requests
+        debugLog(`[onGetBrightness] calling _ensureValidToken`)
         let token = await self._ensureValidToken()
+        debugLog(`[onGetBrightness] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+        
+        if (!token) {
+          throw new Error('No valid token available')
+        }
         
         let res
         try {
           res = await makeRequest(token)
+          debugLog(`[onGetBrightness] API response: ${JSON.stringify(res)}`)
         } catch (err) {
+          debugLog(`[onGetBrightness] API error: ${err.message}`)
           if (err.message && err.message.includes('401')) {
-            self.log.debug('Token expired, refreshing...')
+            debugLog('[onGetBrightness] Token expired, refreshing...')
             const newToken = await self._refreshToken()
             if (newToken) {
+              debugLog(`[onGetBrightness] Got new token, retrying request`)
               res = await makeRequest(newToken)
+              debugLog(`[onGetBrightness] Retry response: ${JSON.stringify(res)}`)
             } else {
               throw new Error('Token refresh failed')
             }
@@ -711,16 +786,22 @@ class LevitonDecoraSmartPlatform {
           }
         }
 
-        if (!res || res.brightness === undefined) {
-          throw new Error('Invalid response from getIotSwitch')
+        if (!res) {
+          throw new Error('API returned null/undefined response')
+        }
+        
+        if (res.brightness === undefined) {
+          debugLog(`[onGetBrightness] Response missing 'brightness' field. Full response: ${JSON.stringify(res)}`)
+          throw new Error(`Invalid response - missing 'brightness' field. Got: ${JSON.stringify(res)}`)
         }
 
-        self.log.debug(`onGetBrightness: ${device.name} @ ${res.brightness}%`)
+        debugLog(`[onGetBrightness] SUCCESS device=${device.name} brightness=${res.brightness}%`)
         service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
+        debugLog(`[onGetBrightness] calling callback(null, ${res.brightness})`)
         callback(null, res.brightness)
       } catch (err) {
         const errorMsg = err && err.message ? err.message : String(err)
-        self.log.error(`onGetBrightness error for ${device.name}: ${errorMsg}`)
+        self.log.error(`[onGetBrightness] FAILED device=${device.name} error=${errorMsg}`)
         if (callback && typeof callback === 'function') {
           callback(new Error(errorMsg))
         }
@@ -738,41 +819,56 @@ class LevitonDecoraSmartPlatform {
   onSetBrightness(service, device, _token) {
     const self = this
     return async function (brightness, callback) {
+      // Debug log helper that routes to platform logger
+      const debugLog = (msg) => self.log.debug(msg)
+      
       try {
-        self.log.debug(`onSetBrightness called for ${device.name}: ${brightness}`)
+        debugLog(`[onSetBrightness] START device=${device.name} id=${device.id} brightness=${brightness}`)
         
         if (!callback || typeof callback !== 'function') {
-          self.log.error('Invalid callback provided to onSetBrightness')
+          self.log.error('[onSetBrightness] Invalid callback provided')
           return
         }
 
         if (typeof brightness !== 'number' || brightness < 0 || brightness > 100) {
           const err = new Error('Brightness must be between 0 and 100')
-          self.log.error(`onSetBrightness error: ${err.message}`)
+          self.log.error(`[onSetBrightness] Invalid brightness value: ${brightness}`)
           callback(err)
           return
         }
 
         const makeRequest = async (token) => {
+          debugLog(`[onSetBrightness] makeRequest called with token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
           return Leviton.putIotSwitch({
             switchID: device.id,
             brightness,
             token,
+            debugLog,
           })
         }
 
         // Ensure we have a valid token before making requests
+        debugLog(`[onSetBrightness] calling _ensureValidToken`)
         let token = await self._ensureValidToken()
+        debugLog(`[onSetBrightness] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+        
+        if (!token) {
+          throw new Error('No valid token available')
+        }
         
         let res
         try {
           res = await makeRequest(token)
+          debugLog(`[onSetBrightness] API response: ${JSON.stringify(res)}`)
         } catch (err) {
+          debugLog(`[onSetBrightness] API error: ${err.message}`)
           if (err.message && err.message.includes('401')) {
-            self.log.debug('Token expired, refreshing...')
+            debugLog('[onSetBrightness] Token expired, refreshing...')
             const newToken = await self._refreshToken()
             if (newToken) {
+              debugLog(`[onSetBrightness] Got new token, retrying request`)
               res = await makeRequest(newToken)
+              debugLog(`[onSetBrightness] Retry response: ${JSON.stringify(res)}`)
             } else {
               throw new Error('Token refresh failed')
             }
@@ -781,12 +877,17 @@ class LevitonDecoraSmartPlatform {
           }
         }
 
-        self.log.info(`onSetBrightness: ${device.name} @ ${res.brightness}%`)
+        if (!res) {
+          throw new Error('API returned null/undefined response')
+        }
+
+        self.log.info(`[onSetBrightness] SUCCESS device=${device.name} brightness=${res.brightness}%`)
         service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
+        debugLog(`[onSetBrightness] calling callback()`)
         callback()
       } catch (err) {
         const errorMsg = err && err.message ? err.message : String(err)
-        self.log.error(`onSetBrightness error for ${device.name}: ${errorMsg}`)
+        self.log.error(`[onSetBrightness] FAILED device=${device.name} error=${errorMsg}`)
         if (callback && typeof callback === 'function') {
           callback(new Error(errorMsg))
         }
@@ -804,33 +905,48 @@ class LevitonDecoraSmartPlatform {
   onGetRotationSpeed(service, device, _token) {
     const self = this
     return async function (callback) {
+      // Debug log helper that routes to platform logger
+      const debugLog = (msg) => self.log.debug(msg)
+      
       try {
-        self.log.debug(`onGetRotationSpeed called for ${device.name}`)
+        debugLog(`[onGetRotationSpeed] START device=${device.name} id=${device.id}`)
         
         if (!callback || typeof callback !== 'function') {
-          self.log.error('Invalid callback provided to onGetRotationSpeed')
+          self.log.error('[onGetRotationSpeed] Invalid callback provided')
           return
         }
 
         const makeRequest = async (token) => {
+          debugLog(`[onGetRotationSpeed] makeRequest called with token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
           return Leviton.getIotSwitch({
             switchID: device.id,
             token,
+            debugLog,
           })
         }
 
         // Ensure we have a valid token before making requests
+        debugLog(`[onGetRotationSpeed] calling _ensureValidToken`)
         let token = await self._ensureValidToken()
+        debugLog(`[onGetRotationSpeed] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+        
+        if (!token) {
+          throw new Error('No valid token available')
+        }
         
         let res
         try {
           res = await makeRequest(token)
+          debugLog(`[onGetRotationSpeed] API response: ${JSON.stringify(res)}`)
         } catch (err) {
+          debugLog(`[onGetRotationSpeed] API error: ${err.message}`)
           if (err.message && err.message.includes('401')) {
-            self.log.debug('Token expired, refreshing...')
+            debugLog('[onGetRotationSpeed] Token expired, refreshing...')
             const newToken = await self._refreshToken()
             if (newToken) {
+              debugLog(`[onGetRotationSpeed] Got new token, retrying request`)
               res = await makeRequest(newToken)
+              debugLog(`[onGetRotationSpeed] Retry response: ${JSON.stringify(res)}`)
             } else {
               throw new Error('Token refresh failed')
             }
@@ -839,16 +955,22 @@ class LevitonDecoraSmartPlatform {
           }
         }
 
-        if (!res || res.brightness === undefined) {
-          throw new Error('Invalid response from getIotSwitch')
+        if (!res) {
+          throw new Error('API returned null/undefined response')
+        }
+        
+        if (res.brightness === undefined) {
+          debugLog(`[onGetRotationSpeed] Response missing 'brightness' field. Full response: ${JSON.stringify(res)}`)
+          throw new Error(`Invalid response - missing 'brightness' field. Got: ${JSON.stringify(res)}`)
         }
 
-        self.log.debug(`onGetRotationSpeed: ${device.name} @ ${res.brightness}%`)
+        debugLog(`[onGetRotationSpeed] SUCCESS device=${device.name} speed=${res.brightness}%`)
         service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
+        debugLog(`[onGetRotationSpeed] calling callback(null, ${res.brightness})`)
         callback(null, res.brightness)
       } catch (err) {
         const errorMsg = err && err.message ? err.message : String(err)
-        self.log.error(`onGetRotationSpeed error for ${device.name}: ${errorMsg}`)
+        self.log.error(`[onGetRotationSpeed] FAILED device=${device.name} error=${errorMsg}`)
         if (callback && typeof callback === 'function') {
           callback(new Error(errorMsg))
         }
@@ -866,41 +988,56 @@ class LevitonDecoraSmartPlatform {
   onSetRotationSpeed(service, device, _token) {
     const self = this
     return async function (speed, callback) {
+      // Debug log helper that routes to platform logger
+      const debugLog = (msg) => self.log.debug(msg)
+      
       try {
-        self.log.debug(`onSetRotationSpeed called for ${device.name}: ${speed}`)
+        debugLog(`[onSetRotationSpeed] START device=${device.name} id=${device.id} speed=${speed}`)
         
         if (!callback || typeof callback !== 'function') {
-          self.log.error('Invalid callback provided to onSetRotationSpeed')
+          self.log.error('[onSetRotationSpeed] Invalid callback provided')
           return
         }
 
         if (typeof speed !== 'number' || speed < 0 || speed > 100) {
           const err = new Error('Rotation speed must be between 0 and 100')
-          self.log.error(`onSetRotationSpeed error: ${err.message}`)
+          self.log.error(`[onSetRotationSpeed] Invalid speed value: ${speed}`)
           callback(err)
           return
         }
 
         const makeRequest = async (token) => {
+          debugLog(`[onSetRotationSpeed] makeRequest called with token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
           return Leviton.putIotSwitch({
             switchID: device.id,
             brightness: speed,
             token,
+            debugLog,
           })
         }
 
         // Ensure we have a valid token before making requests
+        debugLog(`[onSetRotationSpeed] calling _ensureValidToken`)
         let token = await self._ensureValidToken()
+        debugLog(`[onSetRotationSpeed] got token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+        
+        if (!token) {
+          throw new Error('No valid token available')
+        }
         
         let res
         try {
           res = await makeRequest(token)
+          debugLog(`[onSetRotationSpeed] API response: ${JSON.stringify(res)}`)
         } catch (err) {
+          debugLog(`[onSetRotationSpeed] API error: ${err.message}`)
           if (err.message && err.message.includes('401')) {
-            self.log.debug('Token expired, refreshing...')
+            debugLog('[onSetRotationSpeed] Token expired, refreshing...')
             const newToken = await self._refreshToken()
             if (newToken) {
+              debugLog(`[onSetRotationSpeed] Got new token, retrying request`)
               res = await makeRequest(newToken)
+              debugLog(`[onSetRotationSpeed] Retry response: ${JSON.stringify(res)}`)
             } else {
               throw new Error('Token refresh failed')
             }
@@ -909,12 +1046,17 @@ class LevitonDecoraSmartPlatform {
           }
         }
 
-        self.log.info(`onSetRotationSpeed: ${device.name} @ ${res.brightness}%`)
+        if (!res) {
+          throw new Error('API returned null/undefined response')
+        }
+
+        self.log.info(`[onSetRotationSpeed] SUCCESS device=${device.name} speed=${res.brightness}%`)
         service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
+        debugLog(`[onSetRotationSpeed] calling callback()`)
         callback()
       } catch (err) {
         const errorMsg = err && err.message ? err.message : String(err)
-        self.log.error(`onSetRotationSpeed error for ${device.name}: ${errorMsg}`)
+        self.log.error(`[onSetRotationSpeed] FAILED device=${device.name} error=${errorMsg}`)
         if (callback && typeof callback === 'function') {
           callback(new Error(errorMsg))
         }

@@ -586,24 +586,31 @@ function toQueryString(params) {
  * @param {boolean} [cacheOptions.useCache] - Whether to use cache (default: false)
  * @param {string} [cacheOptions.cacheKey] - Cache key (default: url)
  * @param {boolean} [cacheOptions.bypassCircuitBreaker] - Bypass circuit breaker (for critical requests)
+ * @param {Function} [cacheOptions.debugLog] - Optional debug logging function
  * @returns {Promise<Object>} JSON response
  * @throws {Error} If request fails or response is not OK
  */
 async function apiRequest(url, options = {}, cacheOptions = {}) {
-  const { useCache = false, cacheKey = url, bypassCircuitBreaker = false } = cacheOptions
+  const { useCache = false, cacheKey = url, bypassCircuitBreaker = false, debugLog } = cacheOptions
+  const log = debugLog || (() => {})
+
+  log(`[apiRequest] START method=${options.method || 'GET'} url=${url}`)
 
   // Check cache first if enabled
   if (useCache) {
     const cached = responseCache.get(cacheKey)
     if (cached !== null) {
+      log(`[apiRequest] CACHE HIT for ${cacheKey}`)
       return cached
     }
+    log(`[apiRequest] CACHE MISS for ${cacheKey}`)
   }
 
   // Check circuit breaker (unless bypassed for critical requests like login)
   if (!bypassCircuitBreaker && !circuitBreaker.canRequest()) {
     const status = circuitBreaker.getStatus()
     const waitTime = circuitBreaker.resetTimeout - (Date.now() - status.lastFailureTime)
+    log(`[apiRequest] CIRCUIT BREAKER OPEN, wait ${waitTime}ms`)
     throw new Error(`Circuit breaker is OPEN. Service unavailable. Retry in ${Math.ceil(waitTime / 1000)}s`)
   }
 
@@ -621,20 +628,27 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     controller.abort()
   }, API_REQUEST_TIMEOUT_MS)
 
+  const requestHeaders = {
+    ...DEFAULT_HEADERS,
+    ...options.headers,
+  }
+  
+  log(`[apiRequest] FETCHING headers=${JSON.stringify(Object.keys(requestHeaders))} body=${options.body ? options.body.substring(0, 100) : 'none'}`)
+
   try {
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
-      headers: {
-        ...DEFAULT_HEADERS,
-        ...options.headers,
-      },
+      headers: requestHeaders,
     })
 
     clearTimeout(timeoutId)
+    
+    log(`[apiRequest] RESPONSE status=${response.status} statusText=${response.statusText}`)
 
     // Get response text first (can only be read once)
     const responseText = await response.text()
+    log(`[apiRequest] RESPONSE BODY (first 500 chars): ${responseText.substring(0, 500)}`)
 
     if (!response.ok) {
       // Try to provide better error messages
@@ -769,13 +783,28 @@ function getResidenceIotSwitches({ residenceID, token }) {
  * @param {string} params.token - Authentication token
  * @returns {Promise<Object>} Switch state object
  */
-function getIotSwitch({ switchID, token }) {
+/**
+ * Gets the state of an IoT switch
+ * @param {Object} params - Parameters
+ * @param {string} params.switchID - Switch device ID
+ * @param {string} params.token - Authentication token
+ * @param {Function} [params.debugLog] - Optional debug logging function
+ * @returns {Promise<Object>} Switch state
+ */
+function getIotSwitch({ switchID, token, debugLog }) {
+  const log = debugLog || (() => {})
+  
+  log(`[getIotSwitch] START switchID=${switchID} token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+  
   if (!switchID || !token) {
+    log(`[getIotSwitch] ERROR: missing switchID or token`)
     return Promise.reject(new Error('switchID and token are required'))
   }
 
   const url = `${BASE_URL}/IotSwitches/${switchID}`
   const cacheKey = `getIotSwitch:${switchID}`
+
+  log(`[getIotSwitch] URL=${url}`)
 
   return apiRequest(
     url,
@@ -788,8 +817,15 @@ function getIotSwitch({ switchID, token }) {
     {
       useCache: true,
       cacheKey,
+      debugLog: log,
     }
-  )
+  ).then((result) => {
+    log(`[getIotSwitch] SUCCESS power=${result?.power} brightness=${result?.brightness}`)
+    return result
+  }).catch((err) => {
+    log(`[getIotSwitch] ERROR: ${err.message}`)
+    throw err
+  })
 }
 
 /**
@@ -799,33 +835,44 @@ function getIotSwitch({ switchID, token }) {
  * @param {string} [params.power] - Power state ('ON' or 'OFF')
  * @param {number} [params.brightness] - Brightness level (0-100)
  * @param {string} params.token - Authentication token
+ * @param {Function} [params.debugLog] - Optional debug logging function
  * @returns {Promise<Object>} Updated switch state
  */
-function putIotSwitch({ switchID, power, brightness, token }) {
+function putIotSwitch({ switchID, power, brightness, token, debugLog }) {
+  const log = debugLog || (() => {})
+  
+  log(`[putIotSwitch] START switchID=${switchID} power=${power} brightness=${brightness} token=${token ? token.substring(0, 10) + '...' : 'NONE'}`)
+  
   if (!switchID || !token) {
+    log(`[putIotSwitch] ERROR: missing switchID or token`)
     return Promise.reject(new Error('switchID and token are required'))
   }
 
   const body = {}
   if (brightness !== undefined && brightness !== null) {
     if (typeof brightness !== 'number' || brightness < 0 || brightness > 100) {
+      log(`[putIotSwitch] ERROR: invalid brightness ${brightness}`)
       return Promise.reject(new Error('brightness must be a number between 0 and 100'))
     }
     body.brightness = brightness
   }
   if (power !== undefined && power !== null) {
     if (power !== 'ON' && power !== 'OFF') {
+      log(`[putIotSwitch] ERROR: invalid power ${power}`)
       return Promise.reject(new Error("power must be 'ON' or 'OFF'"))
     }
     body.power = power
   }
 
   if (Object.keys(body).length === 0) {
+    log(`[putIotSwitch] ERROR: no power or brightness provided`)
     return Promise.reject(new Error('At least one of power or brightness must be provided'))
   }
 
   const url = `${BASE_URL}/IotSwitches/${switchID}`
   const cacheKey = `getIotSwitch:${switchID}`
+
+  log(`[putIotSwitch] URL=${url} body=${JSON.stringify(body)}`)
 
   // Update device (no caching for PUT requests)
   return apiRequest(
@@ -839,11 +886,16 @@ function putIotSwitch({ switchID, power, brightness, token }) {
     },
     {
       useCache: false,
+      debugLog: log,
     }
   ).then((result) => {
+    log(`[putIotSwitch] SUCCESS result=${JSON.stringify(result)}`)
     // Invalidate cache for this device after successful update
     responseCache.cache.delete(cacheKey)
     return result
+  }).catch((err) => {
+    log(`[putIotSwitch] ERROR: ${err.message}`)
+    throw err
   })
 }
 
@@ -914,12 +966,26 @@ function getResidentialAccountsV2({ residenceObjectID, token }) {
  * @param {string} params.password - User password
  * @returns {Promise<Object>} Login response with token and user ID
  */
-function postPersonLogin({ email, password }) {
+/**
+ * Logs in a person and returns authentication token
+ * @param {Object} params - Parameters
+ * @param {string} params.email - User email
+ * @param {string} params.password - User password
+ * @param {Function} [params.debugLog] - Optional debug logging function
+ * @returns {Promise<Object>} Login response with token
+ */
+function postPersonLogin({ email, password, debugLog }) {
+  const log = debugLog || (() => {})
+  
+  log(`[postPersonLogin] START email=${email}`)
+  
   if (!email || !password) {
+    log(`[postPersonLogin] ERROR: missing email or password`)
     return Promise.reject(new Error('email and password are required'))
   }
 
   if (typeof email !== 'string' || typeof password !== 'string') {
+    log(`[postPersonLogin] ERROR: email or password not strings`)
     return Promise.reject(new Error('email and password must be strings'))
   }
 
@@ -927,9 +993,12 @@ function postPersonLogin({ email, password }) {
     include: 'user',
   })
 
+  const url = `${BASE_URL}/Person/login?${query}`
+  log(`[postPersonLogin] URL=${url}`)
+
   // Login bypasses circuit breaker - it's a critical request needed to recover
   return apiRequest(
-    `${BASE_URL}/Person/login?${query}`,
+    url,
     {
       method: 'POST',
       body: JSON.stringify({
@@ -939,8 +1008,15 @@ function postPersonLogin({ email, password }) {
     },
     {
       bypassCircuitBreaker: true,
+      debugLog: log,
     }
-  )
+  ).then((result) => {
+    log(`[postPersonLogin] SUCCESS token=${result?.id ? result.id.substring(0, 10) + '...' : 'NONE'} userId=${result?.userId}`)
+    return result
+  }).catch((err) => {
+    log(`[postPersonLogin] ERROR: ${err.message}`)
+    throw err
+  })
 }
 
 // WebSocket reconnection configuration
