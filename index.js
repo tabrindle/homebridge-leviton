@@ -84,6 +84,10 @@ class LevitonDecoraSmartPlatform {
     this.config = config
     this.api = api
     this.accessories = []
+    
+    // Central token management
+    this.currentToken = null
+    this.tokenRefreshInProgress = false
 
     // Setup logging with level filtering and optional structured logging
     this.log = this._setupLogging(log, config)
@@ -241,6 +245,59 @@ class LevitonDecoraSmartPlatform {
   }
 
   /**
+   * Refreshes the authentication token
+   * @private
+   * @returns {Promise<string|null>} New token or null if refresh failed
+   */
+  async _refreshToken() {
+    // Prevent concurrent refresh attempts
+    if (this.tokenRefreshInProgress) {
+      this.log.debug('Token refresh already in progress, waiting...')
+      // Wait for existing refresh to complete
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      return this.currentToken
+    }
+
+    this.tokenRefreshInProgress = true
+    this.log.info('Refreshing authentication token...')
+
+    try {
+      const login = await Leviton.postPersonLogin({
+        email: this.config.email,
+        password: this.config.password,
+      })
+
+      this.currentToken = login.id
+      
+      // Update token in all accessory contexts
+      this.accessories.forEach(accessory => {
+        if (accessory.context) {
+          accessory.context.token = this.currentToken
+        }
+      })
+
+      this.log.info('Token refreshed successfully')
+      return this.currentToken
+    } catch (error) {
+      this.log.error(`Failed to refresh token: ${error.message}`)
+      return null
+    } finally {
+      this.tokenRefreshInProgress = false
+    }
+  }
+
+  /**
+   * Gets a valid token, refreshing if needed
+   * @private
+   * @param {Object} accessory - Platform accessory
+   * @returns {Promise<string|null>} Valid token or null
+   */
+  async _getValidToken(accessory) {
+    // Use central token if available, otherwise fall back to accessory context
+    return this.currentToken || (accessory.context && accessory.context.token)
+  }
+
+  /**
    * Checks if a device should be excluded
    * @private
    * @param {Object} device - Device object
@@ -361,6 +418,7 @@ class LevitonDecoraSmartPlatform {
 
       token = login.id
       personID = login.userId
+      this.currentToken = token  // Store centrally for refresh capability
       this.log.debug(`personID: ${personID}, hasToken: ${!!token}`)
     } catch (err) {
       const errorMsg = `Failed to login to Leviton: ${err.message}`
@@ -472,34 +530,54 @@ class LevitonDecoraSmartPlatform {
    * Creates a getter function for power state
    * @param {Object} service - HomeKit service
    * @param {Object} device - Device object
-   * @param {string} token - Authentication token
+   * @param {string} _token - Authentication token (unused, uses currentToken)
    * @returns {Function} Getter callback function
    */
-  onGetPower(service, device, token) {
-    return function (callback) {
+  onGetPower(service, device, _token) {
+    return async function (callback) {
       if (!callback || typeof callback !== 'function') {
         this.log.error('Invalid callback provided to onGetPower')
         return
       }
 
-      Leviton.getIotSwitch({
-        switchID: device.id,
-        token,
-      })
-        .then((res) => {
-          if (!res || res.power === undefined) {
-            throw new Error('Invalid response from getIotSwitch')
-          }
+      const makeRequest = async (token) => {
+        return Leviton.getIotSwitch({
+          switchID: device.id,
+          token,
+        })
+      }
 
-          const isOn = res.power === POWER_ON
-          this.log.debug(`onGetPower: ${device.name} ${res.power}`)
-          service.getCharacteristic(Characteristic.On).updateValue(isOn)
-          callback(null, isOn)
-        })
-        .catch((err) => {
-          this.log.error(`onGetPower error: ${err.message}`)
-          callback(err) // Fix: Always call callback with error
-        })
+      try {
+        let res
+        try {
+          res = await makeRequest(this.currentToken)
+        } catch (err) {
+          // On 401, refresh token and retry once
+          if (err.message && err.message.includes('401')) {
+            this.log.debug('Token expired, refreshing...')
+            const newToken = await this._refreshToken()
+            if (newToken) {
+              res = await makeRequest(newToken)
+            } else {
+              throw new Error('Token refresh failed')
+            }
+          } else {
+            throw err
+          }
+        }
+
+        if (!res || res.power === undefined) {
+          throw new Error('Invalid response from getIotSwitch')
+        }
+
+        const isOn = res.power === POWER_ON
+        this.log.debug(`onGetPower: ${device.name} ${res.power}`)
+        service.getCharacteristic(Characteristic.On).updateValue(isOn)
+        callback(null, isOn)
+      } catch (err) {
+        this.log.error(`onGetPower error: ${err.message}`)
+        callback(err)
+      }
     }
   }
 
@@ -507,11 +585,11 @@ class LevitonDecoraSmartPlatform {
    * Creates a setter function for power state
    * @param {Object} service - HomeKit service
    * @param {Object} device - Device object
-   * @param {string} token - Authentication token
+   * @param {string} _token - Authentication token (unused, uses currentToken)
    * @returns {Function} Setter callback function
    */
-  onSetPower(service, device, token) {
-    return function (value, callback) {
+  onSetPower(service, device, _token) {
+    return async function (value, callback) {
       if (!callback || typeof callback !== 'function') {
         this.log.error('Invalid callback provided to onSetPower')
         return
@@ -519,21 +597,41 @@ class LevitonDecoraSmartPlatform {
 
       const powerValue = value ? POWER_ON : POWER_OFF
 
-      Leviton.putIotSwitch({
-        switchID: device.id,
-        power: powerValue,
-        token,
-      })
-        .then((res) => {
-          const isOn = res.power === POWER_ON
-          this.log.info(`onSetPower: ${device.name} ${res.power}`)
-          service.getCharacteristic(Characteristic.On).updateValue(isOn)
-          callback() // Success - no error
+      const makeRequest = async (token) => {
+        return Leviton.putIotSwitch({
+          switchID: device.id,
+          power: powerValue,
+          token,
         })
-        .catch((err) => {
-          this.log.error(`onSetPower error: ${err.message}`)
-          callback(err) // Fix: Always call callback with error
-        })
+      }
+
+      try {
+        let res
+        try {
+          res = await makeRequest(this.currentToken)
+        } catch (err) {
+          // On 401, refresh token and retry once
+          if (err.message && err.message.includes('401')) {
+            this.log.debug('Token expired, refreshing...')
+            const newToken = await this._refreshToken()
+            if (newToken) {
+              res = await makeRequest(newToken)
+            } else {
+              throw new Error('Token refresh failed')
+            }
+          } else {
+            throw err
+          }
+        }
+
+        const isOn = res.power === POWER_ON
+        this.log.info(`onSetPower: ${device.name} ${res.power}`)
+        service.getCharacteristic(Characteristic.On).updateValue(isOn)
+        callback()
+      } catch (err) {
+        this.log.error(`onSetPower error: ${err.message}`)
+        callback(err)
+      }
     }
   }
 
@@ -541,33 +639,52 @@ class LevitonDecoraSmartPlatform {
    * Creates a getter function for brightness
    * @param {Object} service - HomeKit service
    * @param {Object} device - Device object
-   * @param {string} token - Authentication token
+   * @param {string} _token - Authentication token (unused, uses currentToken)
    * @returns {Function} Getter callback function
    */
-  onGetBrightness(service, device, token) {
-    return function (callback) {
+  onGetBrightness(service, device, _token) {
+    return async function (callback) {
       if (!callback || typeof callback !== 'function') {
         this.log.error('Invalid callback provided to onGetBrightness')
         return
       }
 
-      Leviton.getIotSwitch({
-        switchID: device.id,
-        token,
-      })
-        .then((res) => {
-          if (!res || res.brightness === undefined) {
-            throw new Error('Invalid response from getIotSwitch')
-          }
+      const makeRequest = async (token) => {
+        return Leviton.getIotSwitch({
+          switchID: device.id,
+          token,
+        })
+      }
 
-          this.log.debug(`onGetBrightness: ${device.name} @ ${res.brightness}%`)
-          service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
-          callback(null, res.brightness)
-        })
-        .catch((err) => {
-          this.log.error(`onGetBrightness error: ${err.message}`)
-          callback(err) // Fix: Always call callback with error
-        })
+      try {
+        let res
+        try {
+          res = await makeRequest(this.currentToken)
+        } catch (err) {
+          if (err.message && err.message.includes('401')) {
+            this.log.debug('Token expired, refreshing...')
+            const newToken = await this._refreshToken()
+            if (newToken) {
+              res = await makeRequest(newToken)
+            } else {
+              throw new Error('Token refresh failed')
+            }
+          } else {
+            throw err
+          }
+        }
+
+        if (!res || res.brightness === undefined) {
+          throw new Error('Invalid response from getIotSwitch')
+        }
+
+        this.log.debug(`onGetBrightness: ${device.name} @ ${res.brightness}%`)
+        service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
+        callback(null, res.brightness)
+      } catch (err) {
+        this.log.error(`onGetBrightness error: ${err.message}`)
+        callback(err)
+      }
     }
   }
 
@@ -575,11 +692,11 @@ class LevitonDecoraSmartPlatform {
    * Creates a setter function for brightness
    * @param {Object} service - HomeKit service
    * @param {Object} device - Device object
-   * @param {string} token - Authentication token
+   * @param {string} _token - Authentication token (unused, uses currentToken)
    * @returns {Function} Setter callback function
    */
-  onSetBrightness(service, device, token) {
-    return function (brightness, callback) {
+  onSetBrightness(service, device, _token) {
+    return async function (brightness, callback) {
       if (!callback || typeof callback !== 'function') {
         this.log.error('Invalid callback provided to onSetBrightness')
         return
@@ -592,20 +709,39 @@ class LevitonDecoraSmartPlatform {
         return
       }
 
-      Leviton.putIotSwitch({
-        switchID: device.id,
-        brightness,
-        token,
-      })
-        .then((res) => {
-          this.log.info(`onSetBrightness: ${device.name} @ ${res.brightness}%`)
-          service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
-          callback() // Success
+      const makeRequest = async (token) => {
+        return Leviton.putIotSwitch({
+          switchID: device.id,
+          brightness,
+          token,
         })
-        .catch((err) => {
-          this.log.error(`onSetBrightness error: ${err.message}`)
-          callback(err) // Fix: Always call callback with error
-        })
+      }
+
+      try {
+        let res
+        try {
+          res = await makeRequest(this.currentToken)
+        } catch (err) {
+          if (err.message && err.message.includes('401')) {
+            this.log.debug('Token expired, refreshing...')
+            const newToken = await this._refreshToken()
+            if (newToken) {
+              res = await makeRequest(newToken)
+            } else {
+              throw new Error('Token refresh failed')
+            }
+          } else {
+            throw err
+          }
+        }
+
+        this.log.info(`onSetBrightness: ${device.name} @ ${res.brightness}%`)
+        service.getCharacteristic(Characteristic.Brightness).updateValue(res.brightness)
+        callback()
+      } catch (err) {
+        this.log.error(`onSetBrightness error: ${err.message}`)
+        callback(err)
+      }
     }
   }
 
@@ -613,33 +749,52 @@ class LevitonDecoraSmartPlatform {
    * Creates a getter function for rotation speed (fan)
    * @param {Object} service - HomeKit service
    * @param {Object} device - Device object
-   * @param {string} token - Authentication token
+   * @param {string} _token - Authentication token (unused, uses currentToken)
    * @returns {Function} Getter callback function
    */
-  onGetRotationSpeed(service, device, token) {
-    return function (callback) {
+  onGetRotationSpeed(service, device, _token) {
+    return async function (callback) {
       if (!callback || typeof callback !== 'function') {
         this.log.error('Invalid callback provided to onGetRotationSpeed')
         return
       }
 
-      Leviton.getIotSwitch({
-        switchID: device.id,
-        token,
-      })
-        .then((res) => {
-          if (!res || res.brightness === undefined) {
-            throw new Error('Invalid response from getIotSwitch')
-          }
+      const makeRequest = async (token) => {
+        return Leviton.getIotSwitch({
+          switchID: device.id,
+          token,
+        })
+      }
 
-          this.log.debug(`onGetRotationSpeed: ${device.name} @ ${res.brightness}%`)
-          service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
-          callback(null, res.brightness)
-        })
-        .catch((err) => {
-          this.log.error(`onGetRotationSpeed error: ${err.message}`)
-          callback(err) // Fix: Always call callback with error
-        })
+      try {
+        let res
+        try {
+          res = await makeRequest(this.currentToken)
+        } catch (err) {
+          if (err.message && err.message.includes('401')) {
+            this.log.debug('Token expired, refreshing...')
+            const newToken = await this._refreshToken()
+            if (newToken) {
+              res = await makeRequest(newToken)
+            } else {
+              throw new Error('Token refresh failed')
+            }
+          } else {
+            throw err
+          }
+        }
+
+        if (!res || res.brightness === undefined) {
+          throw new Error('Invalid response from getIotSwitch')
+        }
+
+        this.log.debug(`onGetRotationSpeed: ${device.name} @ ${res.brightness}%`)
+        service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
+        callback(null, res.brightness)
+      } catch (err) {
+        this.log.error(`onGetRotationSpeed error: ${err.message}`)
+        callback(err)
+      }
     }
   }
 
@@ -647,11 +802,11 @@ class LevitonDecoraSmartPlatform {
    * Creates a setter function for rotation speed (fan)
    * @param {Object} service - HomeKit service
    * @param {Object} device - Device object
-   * @param {string} token - Authentication token
+   * @param {string} _token - Authentication token (unused, uses currentToken)
    * @returns {Function} Setter callback function
    */
-  onSetRotationSpeed(service, device, token) {
-    return function (speed, callback) {
+  onSetRotationSpeed(service, device, _token) {
+    return async function (speed, callback) {
       if (!callback || typeof callback !== 'function') {
         this.log.error('Invalid callback provided to onSetRotationSpeed')
         return
@@ -664,20 +819,39 @@ class LevitonDecoraSmartPlatform {
         return
       }
 
-      Leviton.putIotSwitch({
-        switchID: device.id,
-        brightness: speed, // Fan uses brightness field for speed
-        token,
-      })
-        .then((res) => {
-          this.log.info(`onSetRotationSpeed: ${device.name} @ ${res.brightness}%`)
-          service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
-          callback() // Success
+      const makeRequest = async (token) => {
+        return Leviton.putIotSwitch({
+          switchID: device.id,
+          brightness: speed,
+          token,
         })
-        .catch((err) => {
-          this.log.error(`onSetRotationSpeed error: ${err.message}`)
-          callback(err) // Fix: Always call callback with error
-        })
+      }
+
+      try {
+        let res
+        try {
+          res = await makeRequest(this.currentToken)
+        } catch (err) {
+          if (err.message && err.message.includes('401')) {
+            this.log.debug('Token expired, refreshing...')
+            const newToken = await this._refreshToken()
+            if (newToken) {
+              res = await makeRequest(newToken)
+            } else {
+              throw new Error('Token refresh failed')
+            }
+          } else {
+            throw err
+          }
+        }
+
+        this.log.info(`onSetRotationSpeed: ${device.name} @ ${res.brightness}%`)
+        service.getCharacteristic(Characteristic.RotationSpeed).updateValue(res.brightness)
+        callback()
+      } catch (err) {
+        this.log.error(`onSetRotationSpeed error: ${err.message}`)
+        callback(err)
+      }
     }
   }
 
