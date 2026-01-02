@@ -80,7 +80,7 @@
 
 ---
 
-### 🟡 Priority 5: ES Modules Migration - FUTURE
+### 🟡 Priority 5: ES Modules Migration - DEFERRED
 
 **Status:** Low value for this project, deferred indefinitely
 
