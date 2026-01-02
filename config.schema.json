@@ -21,6 +21,18 @@
           "type": "password"
         }
       },
+      "loglevel": {
+        "title": "Log Level",
+        "type": "string",
+        "default": "info",
+        "oneOf": [
+          { "title": "Debug", "enum": ["debug"] },
+          { "title": "Info", "enum": ["info"] },
+          { "title": "Warn", "enum": ["warn"] },
+          { "title": "Error", "enum": ["error"] }
+        ],
+        "description": "Set logging verbosity level"
+      },
       "excludedModels": {
         "type": "array",
         "description": "List of models to be excluded",
