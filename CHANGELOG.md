@@ -5,6 +5,61 @@ All notable changes to homebridge-leviton will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2025-12-30
+
+### Added
+- **Circuit Breaker Pattern**: Prevents cascading failures when Leviton API is down
+  - Automatic failure detection and recovery
+  - Configurable failure threshold (default: 5 failures)
+  - Automatic reset timeout (default: 30 seconds)
+  - Half-open state for gradual recovery
+  - Bypassed for critical requests like login
+
+- **Device State Persistence**: Cache device states for faster startup
+  - Saves device states on shutdown
+  - Loads cached states on startup
+  - Works when API is temporarily unavailable
+  - Automatic state synchronization
+
+- **Structured Logging**: Machine-parseable JSON logging support
+  - Optional structured JSON output
+  - Correlation IDs for request tracing
+  - Better log aggregation support
+  - Enable with `structuredLogs: true` in config
+
+- **Node.js 25 Support**: Added support for Node.js 25.x
+- **Homebridge v2.0 Stable Support**: Updated engine requirements
+
+### Changed
+- **Native Fetch Migration**: Removed deprecated `node-fetch@2.x` dependency
+  - Now uses native `fetch` (built into Node.js 18+)
+  - Reduced bundle size and dependency count
+  - No API changes - fully backward compatible
+
+- **Test Suite**: Expanded to 166 tests with 95%+ coverage
+
+### Removed
+- **node-fetch dependency**: No longer required (using native fetch)
+
+---
+
+## [2.3.0] - 2025-12-30
+
+### Changed
+- **Native Fetch Migration**: Removed deprecated `node-fetch@2.x` dependency
+  - Now uses native `fetch` (built into Node.js 18+)
+  - Reduced bundle size and dependency count
+  - No API changes - fully backward compatible
+
+### Added
+- **Node.js 25 Support**: Added support for Node.js 25.x
+- **Homebridge v2.0 Stable Support**: Updated engine requirements to support Homebridge v2.0.0 stable release
+
+### Removed
+- **node-fetch dependency**: No longer required (using native fetch)
+
+---
+
 ## [2.2.0] - 2025-12-30
 
 ### Added
@@ -119,12 +174,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Upgrade Notes
 
+### From 2.x to 3.0.0
+- No breaking changes for end users
+- Circuit breaker automatically protects against API failures
+- Device persistence enabled by default
+- Optional: Enable structured logging with `structuredLogs: true` in config
+- Native fetch migration is transparent
+- Requires Node.js 18+ (already required by Homebridge v2.0)
+
+### From 2.2.0 to 2.3.0
+- No breaking changes
+- Native fetch migration is transparent (no code changes needed)
+- Requires Node.js 18+ (already required by Homebridge v2.0)
+- Supports Homebridge v2.0.0 stable release
+
 ### From 2.1.0 to 2.2.0
 - No breaking changes
 - WebSocket improvements are automatic
 - No configuration changes required
 
-### From 2.0.0 to 2.2.0
+### From 2.0.0 to 2.3.0
 - Ensure `excludedModels` (not `excludeModels`) is used in config
 - Review logging configuration if using custom log levels
 
@@ -138,15 +207,16 @@ None at this time.
 
 ## Deprecations
 
-- `node-fetch@2.x`: Deprecated but maintained for compatibility. Future versions may migrate to native `fetch` (Node.js 18+).
+None - all deprecated dependencies have been removed in v2.3.0.
 
 ---
 
 ## Known Limitations
 
-1. No rate limiting on API calls (acceptable for Homebridge use case)
-2. No explicit timeouts on API calls (relies on node-fetch defaults)
-3. Using `node-fetch@2.x` (deprecated but no vulnerabilities)
+None - all previous limitations have been addressed:
+- ✅ Rate limiting implemented (v2.2.0)
+- ✅ API timeouts implemented (v2.2.0)
+- ✅ Native fetch migration completed (v2.3.0)
 
 ---
 

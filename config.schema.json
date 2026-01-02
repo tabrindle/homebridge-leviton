@@ -34,6 +34,12 @@
         "items": {
           "type": "string"
         }
+      },
+      "structuredLogs": {
+        "title": "Enable Structured Logging",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable machine-parseable JSON logging for better log aggregation"
       }
     }
   }

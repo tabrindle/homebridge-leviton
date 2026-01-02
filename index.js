@@ -5,6 +5,7 @@
 
 let Service, Characteristic, _Accessory, UUID
 const Leviton = require('./api.js')
+const path = require('path')
 
 // Plugin constants
 const PLUGIN_NAME = 'homebridge-leviton'
@@ -64,8 +65,16 @@ class LevitonDecoraSmartPlatform {
     this.api = api
     this.accessories = []
 
-    // Setup logging with level filtering
+    // Setup logging with level filtering and optional structured logging
     this.log = this._setupLogging(log, config)
+    
+    // Setup structured logger for machine-parseable logs (if enabled)
+    const enableStructuredLogs = config && config.structuredLogs === true
+    this.structuredLog = new Leviton.StructuredLogger(this.log, enableStructuredLogs)
+
+    // Setup device persistence for faster startup
+    const storagePath = api.user ? path.join(api.user.storagePath(), '.homebridge-leviton-state.json') : undefined
+    this.devicePersistence = new Leviton.DevicePersistence(storagePath)
 
     // Validate configuration
     if (!this._validateConfig()) {
@@ -76,6 +85,59 @@ class LevitonDecoraSmartPlatform {
     api.on('didFinishLaunching', async () => {
       await this._initialize()
     })
+    
+    // Save device states on shutdown
+    api.on('shutdown', () => {
+      this._saveDeviceStates()
+    })
+  }
+  
+  /**
+   * Save device states to persistence
+   * @private
+   */
+  _saveDeviceStates() {
+    try {
+      this.accessories.forEach((accessory) => {
+        if (accessory.context && accessory.context.device) {
+          const device = accessory.context.device
+          const service = 
+            accessory.getService(Service.Fan) ||
+            accessory.getService(Service.Switch) ||
+            accessory.getService(Service.Outlet) ||
+            accessory.getService(Service.Lightbulb)
+          
+          if (service) {
+            const isOn = service.getCharacteristic(Characteristic.On).value
+            const state = {
+              id: device.id,
+              name: device.name,
+              model: device.model,
+              power: isOn ? POWER_ON : POWER_OFF,
+            }
+            
+            // Add brightness if applicable
+            const brightnessChar = service.getCharacteristic(Characteristic.Brightness)
+            if (brightnessChar) {
+              state.brightness = brightnessChar.value
+            }
+            
+            // Add rotation speed for fans
+            const rotationChar = service.getCharacteristic(Characteristic.RotationSpeed)
+            if (rotationChar) {
+              state.brightness = rotationChar.value
+            }
+            
+            this.devicePersistence.updateDevice(device.id, state)
+          }
+        }
+      })
+      
+      this.devicePersistence.save()
+      this.log.debug('Device states saved to persistence')
+    } catch (err) {
+      this.log.error(`Failed to save device states: ${err.message}`)
+    }
   }
 
   /**

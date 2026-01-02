@@ -1,10 +1,15 @@
 /**
  * @fileoverview Leviton API client for interacting with My Leviton cloud services
  * @module api
+ * @requires Node.js 18+ (uses native fetch)
  */
 
-const fetch = require('node-fetch')
 const SockJS = require('sockjs-client')
+const fs = require('fs')
+const path = require('path')
+
+// Note: Using native fetch (available in Node.js 18+)
+// No import needed - fetch is a global
 
 // API Configuration
 const BASE_URL = 'https://my.leviton.com/api'
@@ -22,6 +27,14 @@ const CACHE_TTL_MS = 2000 // 2 seconds cache TTL
 
 // API request timeout configuration
 const API_REQUEST_TIMEOUT_MS = 10000 // 10 seconds timeout for API requests
+
+// Circuit breaker configuration
+const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5 // Number of failures before opening circuit
+const CIRCUIT_BREAKER_RESET_TIMEOUT = 30000 // 30 seconds before trying again
+const CIRCUIT_BREAKER_HALF_OPEN_MAX = 3 // Max requests in half-open state
+
+// Device persistence configuration
+const PERSISTENCE_FILE = '.homebridge-leviton-state.json'
 
 /**
  * Simple token bucket rate limiter
@@ -139,8 +152,407 @@ class ResponseCache {
   }
 }
 
+/**
+ * Circuit breaker states
+ * @readonly
+ * @enum {string}
+ */
+const CircuitState = {
+  CLOSED: 'CLOSED', // Normal operation - requests flow through
+  OPEN: 'OPEN', // Circuit tripped - requests fail immediately
+  HALF_OPEN: 'HALF_OPEN', // Testing if service recovered
+}
+
+/**
+ * Circuit breaker pattern implementation for API resilience
+ * Prevents cascading failures when the Leviton API is down
+ * @class CircuitBreaker
+ */
+class CircuitBreaker {
+  /**
+   * Creates a new CircuitBreaker instance
+   * @param {Object} options - Configuration options
+   * @param {number} [options.failureThreshold=5] - Failures before opening circuit
+   * @param {number} [options.resetTimeout=30000] - Time in ms before trying half-open
+   * @param {number} [options.halfOpenMax=3] - Max requests allowed in half-open state
+   */
+  constructor(options = {}) {
+    this.failureThreshold = options.failureThreshold || CIRCUIT_BREAKER_FAILURE_THRESHOLD
+    this.resetTimeout = options.resetTimeout || CIRCUIT_BREAKER_RESET_TIMEOUT
+    this.halfOpenMax = options.halfOpenMax || CIRCUIT_BREAKER_HALF_OPEN_MAX
+    this.state = CircuitState.CLOSED
+    this.failures = 0
+    this.successes = 0
+    this.lastFailureTime = null
+    this.halfOpenRequests = 0
+  }
+
+  /**
+   * Check if circuit allows requests
+   * @returns {boolean} True if request should proceed
+   */
+  canRequest() {
+    if (this.state === CircuitState.CLOSED) {
+      return true
+    }
+
+    if (this.state === CircuitState.OPEN) {
+      // Check if enough time has passed to try again
+      const now = Date.now()
+      if (this.lastFailureTime && (now - this.lastFailureTime) >= this.resetTimeout) {
+        this.state = CircuitState.HALF_OPEN
+        this.halfOpenRequests = 0
+        return true
+      }
+      return false
+    }
+
+    if (this.state === CircuitState.HALF_OPEN) {
+      // Allow limited requests in half-open state
+      return this.halfOpenRequests < this.halfOpenMax
+    }
+
+    return false
+  }
+
+  /**
+   * Record a successful request
+   */
+  recordSuccess() {
+    if (this.state === CircuitState.HALF_OPEN) {
+      this.successes++
+      // After enough successes in half-open, close the circuit
+      if (this.successes >= this.halfOpenMax) {
+        this.reset()
+      }
+    } else if (this.state === CircuitState.CLOSED) {
+      // Gradually reduce failure count on success
+      if (this.failures > 0) {
+        this.failures--
+      }
+    }
+  }
+
+  /**
+   * Record a failed request
+   */
+  recordFailure() {
+    this.lastFailureTime = Date.now()
+
+    if (this.state === CircuitState.HALF_OPEN) {
+      // Any failure in half-open state opens the circuit again
+      this.state = CircuitState.OPEN
+      this.halfOpenRequests = 0
+      this.successes = 0
+    } else if (this.state === CircuitState.CLOSED) {
+      this.failures++
+      if (this.failures >= this.failureThreshold) {
+        this.state = CircuitState.OPEN
+      }
+    }
+  }
+
+  /**
+   * Track half-open request
+   */
+  trackHalfOpenRequest() {
+    if (this.state === CircuitState.HALF_OPEN) {
+      this.halfOpenRequests++
+    }
+  }
+
+  /**
+   * Reset the circuit breaker to closed state
+   */
+  reset() {
+    this.state = CircuitState.CLOSED
+    this.failures = 0
+    this.successes = 0
+    this.lastFailureTime = null
+    this.halfOpenRequests = 0
+  }
+
+  /**
+   * Get current circuit breaker status
+   * @returns {Object} Status object with state and metrics
+   */
+  getStatus() {
+    return {
+      state: this.state,
+      failures: this.failures,
+      successes: this.successes,
+      lastFailureTime: this.lastFailureTime,
+      halfOpenRequests: this.halfOpenRequests,
+    }
+  }
+
+  /**
+   * Execute a function with circuit breaker protection
+   * @param {Function} fn - Async function to execute
+   * @returns {Promise<*>} Result of the function
+   * @throws {Error} If circuit is open or function fails
+   */
+  async execute(fn) {
+    if (!this.canRequest()) {
+      const waitTime = this.resetTimeout - (Date.now() - this.lastFailureTime)
+      throw new Error(`Circuit breaker is OPEN. Service unavailable. Retry in ${Math.ceil(waitTime / 1000)}s`)
+    }
+
+    if (this.state === CircuitState.HALF_OPEN) {
+      this.trackHalfOpenRequest()
+    }
+
+    try {
+      const result = await fn()
+      this.recordSuccess()
+      return result
+    } catch (error) {
+      this.recordFailure()
+      throw error
+    }
+  }
+}
+
+/**
+ * Device state persistence for faster startup and offline resilience
+ * @class DevicePersistence
+ */
+class DevicePersistence {
+  /**
+   * Creates a new DevicePersistence instance
+   * @param {string} [storagePath] - Path to store state file
+   */
+  constructor(storagePath) {
+    this.storagePath = storagePath || path.join(process.env.HOME || '/tmp', PERSISTENCE_FILE)
+    this.deviceStates = new Map()
+    this.loaded = false
+  }
+
+  /**
+   * Load persisted device states from disk
+   * @returns {Map<string, Object>} Map of device ID to state
+   */
+  load() {
+    if (this.loaded) {
+      return this.deviceStates
+    }
+
+    try {
+      if (fs.existsSync(this.storagePath)) {
+        const data = fs.readFileSync(this.storagePath, 'utf8')
+        const parsed = JSON.parse(data)
+        
+        // Validate and convert to Map
+        if (parsed && typeof parsed === 'object' && parsed.devices) {
+          for (const [id, state] of Object.entries(parsed.devices)) {
+            if (state && typeof state === 'object') {
+              this.deviceStates.set(id, {
+                ...state,
+                _cached: true,
+                _cachedAt: parsed.timestamp || Date.now(),
+              })
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore load errors - start fresh
+      this.deviceStates.clear()
+    }
+
+    this.loaded = true
+    return this.deviceStates
+  }
+
+  /**
+   * Save device states to disk
+   * @returns {boolean} True if saved successfully
+   */
+  save() {
+    try {
+      const devices = {}
+      for (const [id, state] of this.deviceStates.entries()) {
+        // Remove internal properties before saving
+        const { _cached, _cachedAt, ...cleanState } = state
+        devices[id] = cleanState
+      }
+
+      const data = JSON.stringify({
+        version: 1,
+        timestamp: Date.now(),
+        devices,
+      }, null, 2)
+
+      fs.writeFileSync(this.storagePath, data, 'utf8')
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Update state for a device
+   * @param {string} deviceId - Device ID
+   * @param {Object} state - Device state
+   */
+  updateDevice(deviceId, state) {
+    if (!deviceId || !state) return
+
+    this.deviceStates.set(deviceId, {
+      ...state,
+      _cached: false,
+      _updatedAt: Date.now(),
+    })
+  }
+
+  /**
+   * Get cached state for a device
+   * @param {string} deviceId - Device ID
+   * @returns {Object|null} Cached state or null
+   */
+  getDevice(deviceId) {
+    return this.deviceStates.get(deviceId) || null
+  }
+
+  /**
+   * Clear all persisted states
+   */
+  clear() {
+    this.deviceStates.clear()
+    try {
+      if (fs.existsSync(this.storagePath)) {
+        fs.unlinkSync(this.storagePath)
+      }
+    } catch {
+      // Ignore delete errors
+    }
+  }
+
+  /**
+   * Get all cached device states
+   * @returns {Map<string, Object>} Map of device states
+   */
+  getAllDevices() {
+    return this.deviceStates
+  }
+}
+
+/**
+ * Structured logging helper for machine-parseable logs
+ * @class StructuredLogger
+ */
+class StructuredLogger {
+  /**
+   * Creates a StructuredLogger wrapper
+   * @param {Object} homebridgeLog - Homebridge log function
+   * @param {boolean} [enableStructured=false] - Enable structured JSON output
+   */
+  constructor(homebridgeLog, enableStructured = false) {
+    this.log = homebridgeLog
+    this.structured = enableStructured
+    this.correlationId = null
+  }
+
+  /**
+   * Set correlation ID for request tracing
+   * @param {string} id - Correlation ID
+   */
+  setCorrelationId(id) {
+    this.correlationId = id
+  }
+
+  /**
+   * Generate a new correlation ID
+   * @returns {string} New correlation ID
+   */
+  generateCorrelationId() {
+    this.correlationId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return this.correlationId
+  }
+
+  /**
+   * Format a log entry
+   * @private
+   * @param {string} level - Log level
+   * @param {string|Object} message - Message or structured data
+   * @param {Object} [context] - Additional context
+   * @returns {string} Formatted log entry
+   */
+  _format(level, message, context = {}) {
+    if (this.structured) {
+      const entry = {
+        timestamp: new Date().toISOString(),
+        level,
+        correlationId: this.correlationId,
+        ...(typeof message === 'object' ? message : { message }),
+        ...context,
+      }
+      return JSON.stringify(entry)
+    }
+
+    // Traditional string format
+    if (typeof message === 'object') {
+      const { event, ...rest } = message
+      const contextStr = Object.keys(rest).length > 0 ? ` ${JSON.stringify(rest)}` : ''
+      return `[${event || 'log'}]${contextStr}`
+    }
+
+    return message
+  }
+
+  /**
+   * Log debug message
+   * @param {string|Object} message - Message or structured data
+   * @param {Object} [context] - Additional context
+   */
+  debug(message, context) {
+    if (this.log && this.log.debug) {
+      this.log.debug(this._format('debug', message, context))
+    }
+  }
+
+  /**
+   * Log info message
+   * @param {string|Object} message - Message or structured data
+   * @param {Object} [context] - Additional context
+   */
+  info(message, context) {
+    if (this.log && this.log.info) {
+      this.log.info(this._format('info', message, context))
+    }
+  }
+
+  /**
+   * Log warning message
+   * @param {string|Object} message - Message or structured data
+   * @param {Object} [context] - Additional context
+   */
+  warn(message, context) {
+    if (this.log && this.log.warn) {
+      this.log.warn(this._format('warn', message, context))
+    }
+  }
+
+  /**
+   * Log error message
+   * @param {string|Object} message - Message or structured data
+   * @param {Object} [context] - Additional context
+   */
+  error(message, context) {
+    if (this.log && this.log.error) {
+      this.log.error(this._format('error', message, context))
+    }
+  }
+}
+
 // Global rate limiter instance
 const rateLimiter = new RateLimiter()
+
+// Global circuit breaker instance
+const circuitBreaker = new CircuitBreaker()
+
+// Global device persistence instance
+const devicePersistence = new DevicePersistence()
 
 // Global response cache instance
 const responseCache = new ResponseCache()
@@ -167,17 +579,18 @@ function toQueryString(params) {
 }
 
 /**
- * Makes an API request with error handling, rate limiting, and optional caching
+ * Makes an API request with error handling, rate limiting, circuit breaker, and optional caching
  * @param {string} url - API endpoint URL
  * @param {Object} options - Fetch options
  * @param {Object} [cacheOptions] - Cache options
  * @param {boolean} [cacheOptions.useCache] - Whether to use cache (default: false)
  * @param {string} [cacheOptions.cacheKey] - Cache key (default: url)
+ * @param {boolean} [cacheOptions.bypassCircuitBreaker] - Bypass circuit breaker (for critical requests)
  * @returns {Promise<Object>} JSON response
  * @throws {Error} If request fails or response is not OK
  */
 async function apiRequest(url, options = {}, cacheOptions = {}) {
-  const { useCache = false, cacheKey = url } = cacheOptions
+  const { useCache = false, cacheKey = url, bypassCircuitBreaker = false } = cacheOptions
 
   // Check cache first if enabled
   if (useCache) {
@@ -187,8 +600,20 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     }
   }
 
+  // Check circuit breaker (unless bypassed for critical requests like login)
+  if (!bypassCircuitBreaker && !circuitBreaker.canRequest()) {
+    const status = circuitBreaker.getStatus()
+    const waitTime = circuitBreaker.resetTimeout - (Date.now() - status.lastFailureTime)
+    throw new Error(`Circuit breaker is OPEN. Service unavailable. Retry in ${Math.ceil(waitTime / 1000)}s`)
+  }
+
   // Rate limiting: wait if needed
   await rateLimiter.waitIfNeeded()
+
+  // Track half-open request if applicable
+  if (!bypassCircuitBreaker && circuitBreaker.state === CircuitState.HALF_OPEN) {
+    circuitBreaker.trackHalfOpenRequest()
+  }
 
   // Create AbortController for timeout
   const controller = new AbortController()
@@ -225,6 +650,12 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
       } catch {
         // Ignore errors when processing error response
       }
+      
+      // Record failure for circuit breaker (server errors indicate service issues)
+      if (!bypassCircuitBreaker && response.status >= 500) {
+        circuitBreaker.recordFailure()
+      }
+      
       throw new Error(`API request failed: ${response.status} ${response.statusText}${errorBody}`)
     }
 
@@ -233,6 +664,12 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     if (!contentType.includes('application/json') && !contentType.includes('text/json')) {
       // API returned non-JSON (likely HTML error page)
       const preview = responseText.length > 200 ? responseText.substring(0, 200) + '...' : responseText
+      
+      // Record failure - non-JSON response often indicates service issues
+      if (!bypassCircuitBreaker) {
+        circuitBreaker.recordFailure()
+      }
+      
       throw new Error(`API returned non-JSON response (Content-Type: ${contentType}). Response preview: ${preview}`)
     }
 
@@ -246,10 +683,21 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     } catch (jsonError) {
       // Handle JSON parsing errors (e.g., when API returns HTML despite Content-Type)
       const preview = responseText.length > 200 ? responseText.substring(0, 200) + '...' : responseText
+      
+      // Record failure for circuit breaker
+      if (!bypassCircuitBreaker) {
+        circuitBreaker.recordFailure()
+      }
+      
       if (jsonError.message && jsonError.message.includes('Unexpected token')) {
         throw new Error(`Failed to parse JSON response: received HTML or invalid JSON. Response preview: ${preview}`)
       }
       throw new Error(`Failed to parse JSON response: ${jsonError.message}. Response preview: ${preview}`)
+    }
+
+    // Record success for circuit breaker
+    if (!bypassCircuitBreaker) {
+      circuitBreaker.recordSuccess()
     }
 
     // Cache response if enabled
@@ -263,7 +711,16 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
 
     // Handle timeout/abort errors
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      // Timeouts indicate service issues - record for circuit breaker
+      if (!bypassCircuitBreaker) {
+        circuitBreaker.recordFailure()
+      }
       throw new Error(`API request timeout after ${API_REQUEST_TIMEOUT_MS}ms`)
+    }
+
+    // Re-throw circuit breaker errors as-is
+    if (error.message && error.message.includes('Circuit breaker')) {
+      throw error
     }
 
     // Re-throw API errors as-is (they already have good context)
@@ -274,6 +731,12 @@ async function apiRequest(url, options = {}, cacheOptions = {}) {
     )) {
       throw error
     }
+    
+    // Network errors indicate service issues
+    if (!bypassCircuitBreaker) {
+      circuitBreaker.recordFailure()
+    }
+    
     // Wrap network errors with more context
     throw new Error(`Network error: ${error.message}`)
   }
@@ -464,13 +927,20 @@ function postPersonLogin({ email, password }) {
     include: 'user',
   })
 
-  return apiRequest(`${BASE_URL}/Person/login?${query}`, {
-    method: 'POST',
-    body: JSON.stringify({
-      email,
-      password,
-    }),
-  })
+  // Login bypasses circuit breaker - it's a critical request needed to recover
+  return apiRequest(
+    `${BASE_URL}/Person/login?${query}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    },
+    {
+      bypassCircuitBreaker: true,
+    }
+  )
 }
 
 // WebSocket reconnection configuration
@@ -657,6 +1127,7 @@ function subscribe(login, devices, callback, scope) {
 }
 
 module.exports = {
+  // API functions
   getIotSwitch,
   getPersonResidentialPermissions,
   getResidenceIotSwitches,
@@ -665,8 +1136,21 @@ module.exports = {
   postPersonLogin,
   putIotSwitch,
   subscribe,
-  // Expose rate limiter and cache for testing and advanced usage
+  
+  // Classes for external use
+  CircuitBreaker,
+  DevicePersistence,
+  StructuredLogger,
+  RateLimiter,
+  ResponseCache,
+  
+  // Expose instances for testing and advanced usage
   _rateLimiter: rateLimiter,
   _responseCache: responseCache,
+  _circuitBreaker: circuitBreaker,
+  _devicePersistence: devicePersistence,
+  
+  // Constants
   RATE_LIMIT_MAX_REQUESTS,
+  CircuitState,
 }

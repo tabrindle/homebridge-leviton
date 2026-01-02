@@ -339,8 +339,8 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 ## 6. Recommendations for Future Versions
 
 ### High Priority (Optional)
-1. **API Request Timeouts**: Add explicit timeouts to API calls
-2. **Rate Limiting**: Implement rate limiting for API calls
+1. ~~**API Request Timeouts**: Add explicit timeouts to API calls~~ ✅ **IMPLEMENTED in v2.2.0**
+2. ~~**Rate Limiting**: Implement rate limiting for API calls~~ ✅ **IMPLEMENTED in v2.2.0**
 3. **Native Fetch**: Migrate from `node-fetch@2.x` to native `fetch` (Node.js 18+)
 
 ### Medium Priority (Optional)
@@ -358,7 +358,7 @@ This comprehensive audit covers security, reliability, and maintainability aspec
 ## 7. Known Limitations
 
 1. ~~**Rate Limiting**: No rate limiting on API calls~~ ✅ **IMPLEMENTED in v2.2.0**
-2. **API Timeouts**: No explicit timeouts on API calls (relies on node-fetch defaults)
+2. ~~**API Timeouts**: No explicit timeouts on API calls~~ ✅ **IMPLEMENTED in v2.2.0** (10-second timeout)
 3. **node-fetch v2**: Using deprecated version (maintained for compatibility)
 
 ---
@@ -378,8 +378,8 @@ The homebridge-leviton plugin has undergone comprehensive security, reliability,
 - WebSocket reconnection logic
 
 **Minor Improvements for Future:**
-- API request timeouts
-- Rate limiting
+- ~~API request timeouts~~ ✅ Done
+- ~~Rate limiting~~ ✅ Done
 - Native fetch migration
 
 The plugin is ready for production release at version 2.2.0.
