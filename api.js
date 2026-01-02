@@ -1112,6 +1112,8 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
 
   // Connection timeout - close if not opened within timeout period
   let isOpen = false
+  let challengeReceived = false
+  let authResponseSent = false
   const connectionTimeout = setTimeout(() => {
     if (!isOpen) {
       scope.log.error('WebSocket connection timeout')
@@ -1142,6 +1144,8 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
     // On 401 Unauthorized after successful connection, don't attempt to reconnect
     // The SockJS session is tied to the original login; re-auth doesn't restore it
     if (code === 401 && isOpen) {
+      // Log diagnostic info to help debug persistent 401 issues
+      scope.log.debug(`WebSocket auth failed - challengeReceived: ${challengeReceived}, authResponseSent: ${authResponseSent}`)
       scope.log.warn('Real-time updates stopped (token expired). Restart Homebridge to restore. Device control still works.')
       return
     }
@@ -1200,10 +1204,12 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
 
     // Handle challenge message
     if (data.type === WS_MESSAGE_TYPES.CHALLENGE) {
+      challengeReceived = true
       // Send token from login object (may be updated on re-auth)
       scope.log.debug(`Received challenge, responding with token: ${login.id ? login.id.substring(0, 20) + '...' : 'undefined'}`)
       const response = [JSON.stringify({ token: login.id })]
       ws.send(response)
+      authResponseSent = true
       return
     }
 
@@ -1242,7 +1248,11 @@ function createWebSocketConnection(login, devices, callback, scope, reconnectAtt
       }
 
       callback(payload)
+      return
     }
+
+    // Log any unhandled message types for debugging
+    scope.log.debug(`WebSocket received unhandled message: ${JSON.stringify(data)}`)
   }
 
   return ws
