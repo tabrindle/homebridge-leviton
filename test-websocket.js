@@ -51,7 +51,7 @@ async function makeRestCall(token, userId) {
 }
 
 function testWebSocket(login) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     console.log('Connecting to WebSocket...')
     const ws = new SockJS(SOCKET_URL)
     let success = false
@@ -64,7 +64,7 @@ function testWebSocket(login) {
       let data
       try {
         data = JSON.parse(message.data)
-      } catch (e) {
+      } catch {
         console.log('Raw message:', message.data)
         return
       }
@@ -186,8 +186,8 @@ function tryAuthResponses(ws, login, nonce) {
   ws.send(response)
 }
 
-// Alternative approaches to try:
-function generateAlternativeResponses(login, nonce) {
+// Alternative approaches to try (kept for manual debugging):
+function _generateAlternativeResponses(login, nonce) {
   const token = login.id
   const userId = login.userId
   
@@ -210,7 +210,7 @@ function generateAlternativeResponses(login, nonce) {
     const decodedNonce = Buffer.from(nonce, 'base64')
     const hmac3 = crypto.createHmac('sha256', token).update(decodedNonce).digest('base64')
     console.log('4. HMAC(token, decode64(nonce)):', hmac3)
-  } catch (e) {
+  } catch {
     console.log('4. Failed to decode nonce')
   }
   
