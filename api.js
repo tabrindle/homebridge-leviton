@@ -1,4 +1,10 @@
-const fetch = require('node-fetch')
+const _nodeFetch = require('node-fetch')
+// On Node 18+ (notably Node 24), node-fetch@2's gzip (Gunzip) decode throws
+// "FetchError: ... Premature close" on the way my.leviton.com closes responses,
+// which escalates to an uncaughtException and crash-loops the whole bridge.
+// Disabling gzip avoids the failing decode path; responses come back uncompressed.
+// See https://github.com/tabrindle/homebridge-leviton/issues/52
+const fetch = (url, opts = {}) => _nodeFetch(url, { compress: false, ...opts })
 const SockJS = require('sockjs-client')
 
 const baseURL = 'https://my.leviton.com/api'
